@@ -15,58 +15,72 @@ import { UpdateTenantDto } from './dto/update-tenant.dto';
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateTenantDto): Promise<TenantResponseDto> {
+  async create(dto: CreateTenantDto, userId: bigint): Promise<TenantResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
 
-    const ownerUserId = this.parseOptionalId(dto.ownerUserId, 'ownerUserId');
-
     try {
-      const tenant = await this.prisma.tenants.create({
-        data: {
-          nombre: dto.nombre,
-          ruc: dto.ruc ?? null,
-          dni: dto.dni ?? null,
-          estado: dto.estado ?? 'ACTIVO',
-          observaciones: dto.observaciones ?? null,
-          owner_user_id: ownerUserId,
-        },
-      });
+      return await this.withUserContext(userId, async (tx) => {
+        const tenant = await tx.tenants.create({
+          data: {
+            nombre: dto.nombre,
+            ruc: dto.ruc ?? null,
+            dni: dto.dni ?? null,
+            estado: dto.estado ?? 'ACTIVO',
+            observaciones: dto.observaciones ?? null,
+            owner_user_id: userId,
+          },
+        });
 
-      return this.toResponse(tenant);
+        await tx.tenant_users.create({
+          data: {
+            id_tenant: tenant.id_tenant,
+            id_user: userId,
+            role: 'OWNER',
+            estado: 'ACTIVO',
+            invited_by: null,
+          },
+        });
+
+        return this.toResponse(tenant);
+      });
     } catch (error) {
       this.handleKnownErrors(error);
       throw error;
     }
   }
 
-  async findAll(query: QueryTenantsDto): Promise<TenantResponseDto[]> {
+  async findAll(query: QueryTenantsDto, userId: bigint): Promise<TenantResponseDto[]> {
     this.ensureEstadoIsValid(query.estado);
 
     const skip = this.normalizeSkip(query.skip);
     const take = this.normalizeTake(query.take);
 
-    const tenants = await this.prisma.tenants.findMany({
-      where: {
-        nombre: query.nombre
-          ? {
-              contains: query.nombre,
-              mode: 'insensitive',
-            }
-          : undefined,
-        estado: query.estado,
-      },
-      orderBy: { id_tenant: 'desc' },
-      skip,
-      take,
-    });
+    const tenants = await this.withUserContext(userId, (tx) =>
+      tx.tenants.findMany({
+        where: {
+          nombre: query.nombre
+            ? {
+                contains: query.nombre,
+                mode: 'insensitive',
+              }
+            : undefined,
+          estado: query.estado,
+        },
+        orderBy: { id_tenant: 'desc' },
+        skip,
+        take,
+      }),
+    );
 
     return tenants.map((tenant) => this.toResponse(tenant));
   }
 
-  async findOne(id: bigint): Promise<TenantResponseDto> {
-    const tenant = await this.prisma.tenants.findUnique({
-      where: { id_tenant: id },
-    });
+  async findOne(id: bigint, userId: bigint): Promise<TenantResponseDto> {
+    const tenant = await this.withUserContext(userId, (tx) =>
+      tx.tenants.findUnique({
+        where: { id_tenant: id },
+      }),
+    );
 
     if (!tenant) {
       throw new NotFoundException(`No existe tenant con id ${id.toString()}`);
@@ -75,22 +89,22 @@ export class TenantsService {
     return this.toResponse(tenant);
   }
 
-  async update(id: bigint, dto: UpdateTenantDto): Promise<TenantResponseDto> {
+  async update(id: bigint, dto: UpdateTenantDto, userId: bigint): Promise<TenantResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
-    const ownerUserId = this.parseOptionalId(dto.ownerUserId, 'ownerUserId');
 
     try {
-      const tenant = await this.prisma.tenants.update({
-        where: { id_tenant: id },
-        data: {
-          nombre: dto.nombre,
-          ruc: dto.ruc,
-          dni: dto.dni,
-          estado: dto.estado,
-          observaciones: dto.observaciones,
-          owner_user_id: ownerUserId,
-        },
-      });
+      const tenant = await this.withUserContext(userId, (tx) =>
+        tx.tenants.update({
+          where: { id_tenant: id },
+          data: {
+            nombre: dto.nombre,
+            ruc: dto.ruc,
+            dni: dto.dni,
+            estado: dto.estado,
+            observaciones: dto.observaciones,
+          },
+        }),
+      );
 
       return this.toResponse(tenant);
     } catch (error) {
@@ -99,11 +113,13 @@ export class TenantsService {
     }
   }
 
-  async remove(id: bigint): Promise<void> {
+  async remove(id: bigint, userId: bigint): Promise<void> {
     try {
-      await this.prisma.tenants.delete({
-        where: { id_tenant: id },
-      });
+      await this.withUserContext(userId, (tx) =>
+        tx.tenants.delete({
+          where: { id_tenant: id },
+        }),
+      );
     } catch (error) {
       this.handleKnownErrors(error);
       throw error;
@@ -117,17 +133,16 @@ export class TenantsService {
     return BigInt(id);
   }
 
-  private parseOptionalId(value: string | null | undefined, fieldName: string): bigint | null | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-    if (value === null || value === '') {
-      return null;
-    }
-    if (!/^\d+$/.test(value)) {
-      throw new BadRequestException(`${fieldName} debe ser un numero entero positivo.`);
-    }
-    return BigInt(value);
+  private async withUserContext<T>(
+    userId: bigint,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
+      );
+      return fn(tx);
+    });
   }
 
   private normalizeSkip(skip?: number): number {
@@ -165,7 +180,7 @@ export class TenantsService {
         throw new ConflictException('Ya existe un tenant con ese nombre.');
       }
       if (error.code === 'P2003') {
-        throw new BadRequestException('ownerUserId no existe en auth_users.');
+        throw new BadRequestException('El usuario del token no existe en auth_users.');
       }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro el tenant solicitado.');

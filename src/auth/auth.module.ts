@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import type { StringValue } from 'ms';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { JwtStrategy } from './strategies/jwt.strategy';
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -14,6 +16,7 @@ function getJwtSecret(): string {
 
 @Module({
   imports: [
+    PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: getJwtSecret(),
       signOptions: {
@@ -23,6 +26,7 @@ function getJwtSecret(): string {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, JwtStrategy],
+  exports: [PassportModule, JwtModule],
 })
 export class AuthModule {}

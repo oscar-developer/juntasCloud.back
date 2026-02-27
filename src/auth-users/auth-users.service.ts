@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { hash } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAuthUserDto } from './dto/create-auth-user.dto';
 import { QueryAuthUsersDto } from './dto/query-auth-users.dto';
@@ -17,13 +18,20 @@ export class AuthUsersService {
 
   async create(dto: CreateAuthUserDto): Promise<AuthUserResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
+    const nombres = this.normalizeRequiredText(dto.nombres, 'nombres');
+    const apellidos = this.normalizeRequiredText(dto.apellidos, 'apellidos');
+    const clave = this.normalizeClave(dto.clave);
+    const passwordHash = await hash(clave, 10);
 
     try {
       const user = await this.prisma.auth_users.create({
         data: {
           email: dto.email,
-          password_hash: dto.passwordHash,
+          nombres,
+          apellidos,
+          password_hash: passwordHash,
           estado: dto.estado ?? 'ACTIVO',
+          email_verified: false,
         },
       });
 
@@ -74,14 +82,21 @@ export class AuthUsersService {
     this.ensureEstadoIsValid(dto.estado);
 
     const lastLoginAt = this.normalizeLastLoginAt(dto.lastLoginAt);
+    const nombres = this.normalizeOptionalText(dto.nombres, 'nombres');
+    const apellidos = this.normalizeOptionalText(dto.apellidos, 'apellidos');
+    const passwordHash =
+      dto.clave !== undefined ? await hash(this.normalizeClave(dto.clave), 10) : undefined;
 
     try {
       const user = await this.prisma.auth_users.update({
         where: { id_user: id },
         data: {
           email: dto.email,
-          password_hash: dto.passwordHash,
+          nombres,
+          apellidos,
+          password_hash: passwordHash,
           estado: dto.estado,
+          updated_at: new Date(),
           last_login_at: lastLoginAt,
         },
       });
@@ -155,6 +170,35 @@ export class AuthUsersService {
     }
   }
 
+  private normalizeClave(clave: string): string {
+    if (typeof clave !== 'string') {
+      throw new BadRequestException('clave es obligatoria.');
+    }
+    const normalized = clave.trim();
+    if (!normalized) {
+      throw new BadRequestException('clave no puede estar vacia.');
+    }
+    return normalized;
+  }
+
+  private normalizeRequiredText(value: string, field: string): string {
+    if (typeof value !== 'string') {
+      throw new BadRequestException(`${field} es obligatorio.`);
+    }
+    const normalized = value.trim();
+    if (!normalized) {
+      throw new BadRequestException(`${field} no puede estar vacio.`);
+    }
+    return normalized;
+  }
+
+  private normalizeOptionalText(value: string | undefined, field: string): string | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    return this.normalizeRequiredText(value, field);
+  }
+
   private handleKnownErrors(error: unknown): void {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
@@ -169,15 +213,23 @@ export class AuthUsersService {
   private toResponse(user: {
     id_user: bigint;
     email: string;
+    nombres: string;
+    apellidos: string;
     estado: string;
+    email_verified: boolean;
     created_at: Date;
+    updated_at: Date;
     last_login_at: Date | null;
   }): AuthUserResponseDto {
     return {
-      idUser: user.id_user.toString(),
+      idUser: Number(user.id_user),
       email: user.email,
+      nombres: user.nombres,
+      apellidos: user.apellidos,
       estado: user.estado,
+      emailVerified: user.email_verified,
       createdAt: user.created_at,
+      updatedAt: user.updated_at,
       lastLoginAt: user.last_login_at,
     };
   }

@@ -4,8 +4,14 @@ export class UpdateAuthUserDto {
   @ApiPropertyOptional({ example: 'nuevo_correo@correo.com', maxLength: 120 })
   email?: string;
 
-  @ApiPropertyOptional({ example: '$2b$10$K7LwMAsxkB....', maxLength: 255 })
-  passwordHash?: string;
+  @ApiPropertyOptional({ example: 'Oscar', maxLength: 100 })
+  nombres?: string;
+
+  @ApiPropertyOptional({ example: 'Clemente', maxLength: 100 })
+  apellidos?: string;
+
+  @ApiPropertyOptional({ example: 'miclave2026' })
+  clave?: string;
 
   @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO'] })
   estado?: 'ACTIVO' | 'INACTIVO';

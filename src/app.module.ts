@@ -7,6 +7,12 @@ import { TenantsModule } from './tenants/tenants.module';
 import { AuthModule } from './auth/auth.module';
 import { TenantInvitationsModule } from './tenant-invitations/tenant-invitations.module';
 import { PersonasModule } from './personas/personas.module';
+import { TerrenosModule } from './terrenos/terrenos.module';
+import { JuntasDirectivasModule } from './juntas-directivas/juntas-directivas.module';
+import { FaenasModule } from './faenas/faenas.module';
+import { AsambleasModule } from './asambleas/asambleas.module';
+import { BienesModule } from './bienes/bienes.module';
+import { PersonaTerrenosModule } from './persona-terrenos/persona-terrenos.module';
 
 @Module({  
   imports: [
@@ -16,6 +22,12 @@ import { PersonasModule } from './personas/personas.module';
     AuthModule,
     TenantInvitationsModule,
     PersonasModule,
+    TerrenosModule,
+    JuntasDirectivasModule,
+    FaenasModule,
+    AsambleasModule,
+    BienesModule,
+    PersonaTerrenosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

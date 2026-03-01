@@ -10,6 +10,9 @@ async function bootstrap() {
   //   logger: ['error', 'warn'],
   // });
 
+  // ✅ Prefijo global para TODA la API
+  app.setGlobalPrefix('api');
+
   const config = new DocumentBuilder()
     .setTitle('JuntasCloud API')
     .setDescription('Documentacion de endpoints para JuntasCloud')
@@ -17,7 +20,9 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  
+  // ✅ Ahora swagger queda en /api/docs (sin repetir api/api)
+  SwaggerModule.setup('docs', app, document);
 
   app.enableCors();
 

@@ -22,8 +22,8 @@ import { CajaMovimientosModule } from './caja-movimientos/caja-movimientos.modul
   imports: [
     PrismaModule,
     AuthUsersModule,
-    TenantsModule,
     AuthModule,
+    TenantsModule,
     TenantInvitationsModule,
     PersonasModule,
     TerrenosModule,

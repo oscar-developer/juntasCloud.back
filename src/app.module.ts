@@ -13,6 +13,10 @@ import { FaenasModule } from './faenas/faenas.module';
 import { AsambleasModule } from './asambleas/asambleas.module';
 import { BienesModule } from './bienes/bienes.module';
 import { PersonaTerrenosModule } from './persona-terrenos/persona-terrenos.module';
+import { JuntaMiembrosModule } from './junta-miembros/junta-miembros.module';
+import { FaenaParticipacionesModule } from './faena-participaciones/faena-participaciones.module';
+import { AsistenciaAsambleaModule } from './asistencia-asamblea/asistencia-asamblea.module';
+import { CajaMovimientosModule } from './caja-movimientos/caja-movimientos.module';
 
 @Module({  
   imports: [
@@ -28,6 +32,10 @@ import { PersonaTerrenosModule } from './persona-terrenos/persona-terrenos.modul
     AsambleasModule,
     BienesModule,
     PersonaTerrenosModule,
+    JuntaMiembrosModule,
+    FaenaParticipacionesModule,
+    AsistenciaAsambleaModule,
+    CajaMovimientosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

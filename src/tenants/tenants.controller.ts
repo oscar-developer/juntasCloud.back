@@ -66,7 +66,7 @@ export class TenantsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener tenant por id_tenant' })
-  @ApiParam({ name: 'id', description: 'id_tenant de tenants' })
+  @ApiParam({ name: 'id', type: Number, description: 'id_tenant de tenants' })
   @ApiOkResponse({ type: TenantResponseDto })
   findOne(@Param('id') id: string, @Req() req: Request): Promise<TenantResponseDto> {
     return this.tenantsService.findOne(this.tenantsService.parseId(id), this.getUserId(req));
@@ -74,7 +74,7 @@ export class TenantsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar tenant por id_tenant' })
-  @ApiParam({ name: 'id', description: 'id_tenant de tenants' })
+  @ApiParam({ name: 'id', type: Number, description: 'id_tenant de tenants' })
   @ApiOkResponse({ type: TenantResponseDto })
   update(
     @Param('id') id: string,
@@ -87,7 +87,7 @@ export class TenantsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Eliminar tenant por id_tenant' })
-  @ApiParam({ name: 'id', description: 'id_tenant de tenants' })
+  @ApiParam({ name: 'id', type: Number, description: 'id_tenant de tenants' })
   @ApiNoContentResponse({ description: 'Tenant eliminado' })
   async remove(@Param('id') id: string, @Req() req: Request): Promise<void> {
     await this.tenantsService.remove(this.tenantsService.parseId(id), this.getUserId(req));

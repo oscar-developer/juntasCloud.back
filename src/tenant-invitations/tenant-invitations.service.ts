@@ -321,7 +321,7 @@ export class TenantInvitationsService {
   }): TenantInvitationResponseDto {
     return {
       idInvitation: Number(invitation.id_invitation),
-      idTenant: invitation.id_tenant.toString(),
+      idTenant: Number(invitation.id_tenant),
       email: invitation.email,
       role: invitation.role,
       status: invitation.status,

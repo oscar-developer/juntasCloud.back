@@ -1,11 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PersonaResponseDto {
-  @ApiProperty({ example: '1' })
-  idTenant!: string;
+  @ApiProperty({ type: Number, example: 1 })
+  idTenant!: number;
 
-  @ApiProperty({ example: '1' })
-  idPersona!: string;
+  @ApiProperty({ type: Number, example: 1 })
+  idPersona!: number;
 
   @ApiProperty({ example: 'Juan' })
   nombres!: string;

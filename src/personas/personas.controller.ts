@@ -74,7 +74,7 @@ export class PersonasController {
   @Get(':idPersona')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Obtener persona por idPersona' })
-  @ApiParam({ name: 'idPersona', description: 'id_persona dentro del tenant activo' })
+  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
   @ApiOkResponse({ type: PersonaResponseDto })
   findOne(@Param('idPersona') idPersona: string, @Req() req: Request): Promise<PersonaResponseDto> {
     return this.personasService.findOne(
@@ -87,7 +87,7 @@ export class PersonasController {
   @Patch(':idPersona')
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Actualizar persona' })
-  @ApiParam({ name: 'idPersona', description: 'id_persona dentro del tenant activo' })
+  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
   @ApiOkResponse({ type: PersonaResponseDto })
   update(
     @Param('idPersona') idPersona: string,
@@ -105,7 +105,7 @@ export class PersonasController {
   @Delete(':idPersona')
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Retirar persona (borrado logico)' })
-  @ApiParam({ name: 'idPersona', description: 'id_persona dentro del tenant activo' })
+  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
   @ApiOkResponse({ type: PersonaResponseDto })
   remove(@Param('idPersona') idPersona: string, @Req() req: Request): Promise<PersonaResponseDto> {
     return this.personasService.remove(

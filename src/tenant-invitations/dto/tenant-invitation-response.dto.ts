@@ -4,8 +4,8 @@ export class TenantInvitationResponseDto {
   @ApiProperty({ example: 1 })
   idInvitation!: number;
 
-  @ApiProperty({ example: '1' })
-  idTenant!: string;
+  @ApiProperty({ type: Number, example: 1 })
+  idTenant!: number;
 
   @ApiProperty({ example: 'nuevo@correo.com' })
   email!: string;

@@ -199,14 +199,14 @@ export class TenantsService {
     owner_user_id: bigint | null;
   }): TenantResponseDto {
     return {
-      idTenant: tenant.id_tenant.toString(),
+      idTenant: Number(tenant.id_tenant),
       nombre: tenant.nombre,
       ruc: tenant.ruc,
       dni: tenant.dni,
       estado: tenant.estado,
       createdAt: tenant.created_at,
       observaciones: tenant.observaciones,
-      ownerUserId: tenant.owner_user_id?.toString() ?? null,
+      ownerUserId: tenant.owner_user_id === null ? null : Number(tenant.owner_user_id),
     };
   }
 }

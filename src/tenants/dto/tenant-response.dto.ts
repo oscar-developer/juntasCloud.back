@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TenantResponseDto {
-  @ApiProperty({ example: '1' })
-  idTenant!: string;
+  @ApiProperty({ type: Number, example: 1 })
+  idTenant!: number;
 
   @ApiProperty({ example: 'Junta Directiva Los Alamos' })
   nombre!: string;
@@ -22,6 +22,6 @@ export class TenantResponseDto {
   @ApiProperty({ nullable: true, example: 'Tenant creado desde API' })
   observaciones!: string | null;
 
-  @ApiProperty({ nullable: true, example: '1' })
-  ownerUserId!: string | null;
+  @ApiProperty({ type: Number, nullable: true, example: 1 })
+  ownerUserId!: number | null;
 }

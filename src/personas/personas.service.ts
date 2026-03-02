@@ -283,8 +283,8 @@ export class PersonasService {
     observaciones: string | null;
   }): PersonaResponseDto {
     return {
-      idTenant: persona.id_tenant.toString(),
-      idPersona: persona.id_persona.toString(),
+      idTenant: Number(persona.id_tenant),
+      idPersona: Number(persona.id_persona),
       nombres: persona.nombres,
       apellidoPaterno: persona.apellidopaterno,
       apellidoMaterno: persona.apellidomaterno,

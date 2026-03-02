@@ -31,7 +31,7 @@ export class TenantInvitationsController {
 
   @Post('tenants/:tenantId/invitations')
   @ApiOperation({ summary: 'Crear invitacion para un tenant' })
-  @ApiParam({ name: 'tenantId', description: 'id_tenant del tenant destino' })
+  @ApiParam({ name: 'tenantId', type: Number, description: 'id_tenant del tenant destino' })
   @ApiCreatedResponse({ type: TenantInvitationResponseDto })
   create(
     @Param('tenantId') tenantId: string,
@@ -54,7 +54,7 @@ export class TenantInvitationsController {
 
   @Post('me/invitations/:id/accept')
   @ApiOperation({ summary: 'Aceptar invitacion' })
-  @ApiParam({ name: 'id', description: 'id_invitation de tenant_invitations' })
+  @ApiParam({ name: 'id', type: Number, description: 'id_invitation de tenant_invitations' })
   @ApiOkResponse({ type: TenantInvitationResponseDto })
   accept(@Param('id') id: string, @Req() req: Request): Promise<TenantInvitationResponseDto> {
     return this.tenantInvitationsService.accept(
@@ -65,7 +65,7 @@ export class TenantInvitationsController {
 
   @Post('me/invitations/:id/reject')
   @ApiOperation({ summary: 'Rechazar invitacion' })
-  @ApiParam({ name: 'id', description: 'id_invitation de tenant_invitations' })
+  @ApiParam({ name: 'id', type: Number, description: 'id_invitation de tenant_invitations' })
   @ApiOkResponse({ type: TenantInvitationResponseDto })
   reject(@Param('id') id: string, @Req() req: Request): Promise<TenantInvitationResponseDto> {
     return this.tenantInvitationsService.reject(
@@ -76,7 +76,7 @@ export class TenantInvitationsController {
 
   @Get('tenants/:tenantId/invitations')
   @ApiOperation({ summary: 'Listar invitaciones de un tenant' })
-  @ApiParam({ name: 'tenantId', description: 'id_tenant del tenant destino' })
+  @ApiParam({ name: 'tenantId', type: Number, description: 'id_tenant del tenant destino' })
   @ApiOkResponse({ type: TenantInvitationResponseDto, isArray: true })
   listByTenant(
     @Param('tenantId') tenantId: string,

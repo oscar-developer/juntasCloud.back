@@ -115,11 +115,18 @@ export class TenantsService {
 
   async remove(id: bigint, userId: bigint): Promise<void> {
     try {
-      await this.withUserContext(userId, (tx) =>
-        tx.tenants.delete({
+      await this.withUserContext(userId, async (tx) => {
+        await tx.tenant_users.deleteMany({
+          where: {
+            id_tenant: id,
+            id_user: userId,
+          },
+        });
+
+        await tx.tenants.delete({
           where: { id_tenant: id },
-        }),
-      );
+        });
+      });
     } catch (error) {
       this.handleKnownErrors(error);
       throw error;
@@ -180,7 +187,7 @@ export class TenantsService {
         throw new ConflictException('Ya existe un tenant con ese nombre.');
       }
       if (error.code === 'P2003') {
-        throw new BadRequestException('El usuario del token no existe en auth_users.');
+        throw new ConflictException('No se puede eliminar el tenant porque tiene relaciones asociadas.');
       }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro el tenant solicitado.');

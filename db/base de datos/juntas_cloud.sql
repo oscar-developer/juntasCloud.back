@@ -647,6 +647,13 @@ USING (
 WITH CHECK (
   owner_user_id = current_setting('app.user_id')::bigint
 );
+-- DELETE
+CREATE POLICY tenants_delete_by_owner
+ON tenants
+FOR DELETE
+USING (
+  owner_user_id = current_setting('app.user_id')::bigint
+);
 
 -- 5.2) Tenant_users: un usuario puede ver solo sus memberships
 ALTER TABLE tenant_users ENABLE ROW LEVEL SECURITY;

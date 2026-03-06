@@ -17,6 +17,8 @@ import { RegisterDto } from './dto/register.dto';
 import { AuthMessageResponseDto } from './dto/auth-message-response.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -69,6 +71,32 @@ export class AuthController {
       dto,
       this.extractRequestMetadata(req),
     );
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Solicitar recuperacion de contrasena' })
+  @ApiOkResponse({ type: AuthMessageResponseDto })
+  @ApiBadRequestResponse({ description: 'Payload invalido' })
+  forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+    @Req() req: Request,
+  ): Promise<AuthMessageResponseDto> {
+    return this.authService.forgotPassword(
+      dto,
+      this.extractRequestMetadata(req),
+    );
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Actualizar contrasena con token de recuperacion' })
+  @ApiOkResponse({ type: AuthMessageResponseDto })
+  @ApiBadRequestResponse({
+    description: 'Token invalido, expirado o ya utilizado; o password invalido',
+  })
+  resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ): Promise<AuthMessageResponseDto> {
+    return this.authService.resetPassword(dto);
   }
 
   private extractRequestMetadata(req: Request): {

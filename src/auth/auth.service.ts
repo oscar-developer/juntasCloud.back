@@ -18,6 +18,8 @@ import { RegisterDto } from './dto/register.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { AuthMessageResponseDto } from './dto/auth-message-response.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 type LoginMetadata = {
   ipAddress: string | null;
@@ -28,6 +30,8 @@ type LoginMetadata = {
 export class AuthService {
   private static readonly VERIFY_EMAIL_TOKEN_TYPE = 'VERIFY_EMAIL';
   private static readonly VERIFY_EMAIL_TOKEN_TTL_HOURS = 24;
+  private static readonly RESET_PASSWORD_TOKEN_TYPE = 'RESET_PASSWORD';
+  private static readonly RESET_PASSWORD_TOKEN_TTL_HOURS = 1;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -178,7 +182,10 @@ export class AuthService {
 
     const passwordHash = await hash(password, 10);
     const now = new Date();
-    const expiresAt = this.buildVerifyTokenExpiration(now);
+    const expiresAt = this.buildTokenExpiration(
+      now,
+      AuthService.VERIFY_EMAIL_TOKEN_TTL_HOURS,
+    );
     const plainToken = this.generatePlainToken();
     const tokenHash = this.hashToken(plainToken);
 
@@ -324,7 +331,10 @@ export class AuthService {
     }
 
     const now = new Date();
-    const expiresAt = this.buildVerifyTokenExpiration(now);
+    const expiresAt = this.buildTokenExpiration(
+      now,
+      AuthService.VERIFY_EMAIL_TOKEN_TTL_HOURS,
+    );
     const plainToken = this.generatePlainToken();
     const tokenHash = this.hashToken(plainToken);
 
@@ -358,6 +368,136 @@ export class AuthService {
     });
 
     return genericResponse;
+  }
+
+  async forgotPassword(
+    dto: ForgotPasswordDto,
+    metadata: LoginMetadata,
+  ): Promise<AuthMessageResponseDto> {
+    const email = this.normalizeEmail(dto.email);
+    const genericResponse: AuthMessageResponseDto = {
+      message:
+        'Si el correo existe, enviaremos instrucciones para recuperar tu contrasena.',
+    };
+
+    const user = await this.prisma.auth_users.findUnique({
+      where: { email },
+      select: {
+        id_user: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      return genericResponse;
+    }
+
+    const now = new Date();
+    const expiresAt = this.buildTokenExpiration(
+      now,
+      AuthService.RESET_PASSWORD_TOKEN_TTL_HOURS,
+    );
+    const plainToken = this.generatePlainToken();
+    const tokenHash = this.hashToken(plainToken);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.auth_user_tokens.updateMany({
+        where: {
+          id_user: user.id_user,
+          token_type: AuthService.RESET_PASSWORD_TOKEN_TYPE,
+          used_at: null,
+          expires_at: { gt: now },
+        },
+        data: { used_at: now },
+      });
+
+      await tx.auth_user_tokens.create({
+        data: {
+          id_user: user.id_user,
+          token_hash: tokenHash,
+          token_type: AuthService.RESET_PASSWORD_TOKEN_TYPE,
+          expires_at: expiresAt,
+          created_ip: metadata.ipAddress,
+          user_agent: metadata.userAgent,
+        },
+      });
+    });
+
+    await this.mailService.sendPasswordReset({
+      email: user.email,
+      token: plainToken,
+      expiresInHours: AuthService.RESET_PASSWORD_TOKEN_TTL_HOURS,
+    });
+
+    return genericResponse;
+  }
+
+  async resetPassword(dto: ResetPasswordDto): Promise<AuthMessageResponseDto> {
+    const token = this.normalizeToken(dto.token);
+    const newPassword = this.normalizePassword(dto.newPassword);
+    const tokenHash = this.hashToken(token);
+    const now = new Date();
+    const passwordHash = await hash(newPassword, 10);
+
+    await this.prisma.$transaction(async (tx) => {
+      const storedToken = await tx.auth_user_tokens.findFirst({
+        where: {
+          token_hash: tokenHash,
+          token_type: AuthService.RESET_PASSWORD_TOKEN_TYPE,
+        },
+        select: {
+          id_token: true,
+          id_user: true,
+          expires_at: true,
+          used_at: true,
+        },
+      });
+
+      if (
+        !storedToken ||
+        storedToken.used_at ||
+        storedToken.expires_at.getTime() <= now.getTime()
+      ) {
+        throw new BadRequestException(
+          'Token invalido, expirado o ya utilizado.',
+        );
+      }
+
+      const tokenUpdateResult = await tx.auth_user_tokens.updateMany({
+        where: {
+          id_token: storedToken.id_token,
+          used_at: null,
+        },
+        data: { used_at: now },
+      });
+
+      if (tokenUpdateResult.count !== 1) {
+        throw new BadRequestException(
+          'Token invalido, expirado o ya utilizado.',
+        );
+      }
+
+      await tx.auth_users.update({
+        where: { id_user: storedToken.id_user },
+        data: {
+          password_hash: passwordHash,
+          updated_at: now,
+        },
+      });
+
+      await tx.auth_user_tokens.updateMany({
+        where: {
+          id_user: storedToken.id_user,
+          token_type: AuthService.RESET_PASSWORD_TOKEN_TYPE,
+          used_at: null,
+        },
+        data: { used_at: now },
+      });
+    });
+
+    return {
+      message: 'Contrasena actualizada correctamente.',
+    };
   }
 
   private async insertLoginLog(input: {
@@ -450,11 +590,8 @@ export class AuthService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  private buildVerifyTokenExpiration(referenceDate: Date): Date {
-    return new Date(
-      referenceDate.getTime() +
-        AuthService.VERIFY_EMAIL_TOKEN_TTL_HOURS * 60 * 60 * 1000,
-    );
+  private buildTokenExpiration(referenceDate: Date, ttlHours: number): Date {
+    return new Date(referenceDate.getTime() + ttlHours * 60 * 60 * 1000);
   }
 
   private handleKnownErrors(error: unknown): void {

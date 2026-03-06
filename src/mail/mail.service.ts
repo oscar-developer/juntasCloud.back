@@ -7,14 +7,21 @@ type SendEmailVerificationInput = {
   expiresInHours: number;
 };
 
+type SendPasswordResetInput = {
+  email: string;
+  token: string;
+  expiresInHours: number;
+};
+
 @Injectable()
 export class MailService {
   async sendEmailVerification(
     input: SendEmailVerificationInput,
   ): Promise<void> {
     const config = this.getSmtpConfig();
-    const verificationUrl = this.buildVerificationUrl(
+    const verificationUrl = this.buildFrontendUrl(
       config.frontendBaseUrl,
+      '/verify-email',
       input.token,
     );
 
@@ -48,6 +55,49 @@ export class MailService {
     } catch {
       throw new InternalServerErrorException(
         'No se pudo enviar el correo de verificacion. Intentalo nuevamente.',
+      );
+    }
+  }
+
+  async sendPasswordReset(input: SendPasswordResetInput): Promise<void> {
+    const config = this.getSmtpConfig();
+    const resetUrl = this.buildFrontendUrl(
+      config.frontendBaseUrl,
+      '/reset-password',
+      input.token,
+    );
+
+    const transporter: Transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: {
+        user: config.user,
+        pass: config.pass,
+      },
+    });
+
+    const subject = 'Recupera tu contrasena en JuntasCloud';
+    const text = [
+      'Hola,',
+      '',
+      `Para restablecer tu contrasena, abre este enlace: ${resetUrl}`,
+      `Este enlace expira en ${input.expiresInHours} horas.`,
+      'Si no solicitaste este cambio, ignora este correo.',
+    ].join('\n');
+    const html = `<p>Hola,</p><p>Para restablecer tu contrasena, haz clic en el siguiente enlace:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Este enlace expira en ${input.expiresInHours} horas.</p><p>Si no solicitaste este cambio, ignora este correo.</p>`;
+
+    try {
+      await transporter.sendMail({
+        from: config.from,
+        to: input.email,
+        subject,
+        text,
+        html,
+      });
+    } catch {
+      throw new InternalServerErrorException(
+        'No se pudo enviar el correo de recuperacion. Intentalo nuevamente.',
       );
     }
   }
@@ -95,10 +145,17 @@ export class MailService {
     };
   }
 
-  private buildVerificationUrl(frontendBaseUrl: string, token: string): string {
+  private buildFrontendUrl(
+    frontendBaseUrl: string,
+    targetPath: string,
+    token: string,
+  ): string {
     const url = new URL(frontendBaseUrl);
     const currentPath = url.pathname.replace(/\/+$/, '');
-    url.pathname = `${currentPath}/verify-email`;
+    const normalizedPath = targetPath.startsWith('/')
+      ? targetPath
+      : `/${targetPath}`;
+    url.pathname = `${currentPath}${normalizedPath}`;
     url.searchParams.set('token', token);
     return url.toString();
   }

@@ -1,5 +1,6 @@
-import { Body, Controller, Post, Req } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
@@ -19,6 +20,9 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { getUserIdFromRequest } from '../common/auth/get-user-id-from-request';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -97,6 +101,26 @@ export class AuthController {
     @Body() dto: ResetPasswordDto,
   ): Promise<AuthMessageResponseDto> {
     return this.authService.resetPassword(dto);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Cambiar contrasena de usuario autenticado',
+  })
+  @ApiOkResponse({ type: AuthMessageResponseDto })
+  @ApiBadRequestResponse({
+    description: 'Payload invalido o nueva password invalida',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token invalido o password actual incorrecta',
+  })
+  changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
+  ): Promise<AuthMessageResponseDto> {
+    return this.authService.changePassword(getUserIdFromRequest(req), dto);
   }
 
   private extractRequestMetadata(req: Request): {

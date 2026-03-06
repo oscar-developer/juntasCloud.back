@@ -23,8 +23,26 @@ type AuthUserIdentity = {
   email: string;
 };
 
+type InvitationRecord = {
+  id_invitation: bigint;
+  id_tenant: bigint;
+  email: string;
+  role: string;
+  status: string;
+  expires_at: Date;
+  invited_by: bigint;
+  created_at: Date;
+};
+
 @Injectable()
 export class TenantInvitationsService {
+  private static readonly STATUS_PRIORITY: Record<string, number> = {
+    PENDING: 0,
+    ACCEPTED: 1,
+    REVOKED: 2,
+    EXPIRED: 3,
+  };
+
   constructor(private readonly prisma: PrismaService) {}
 
   async create(
@@ -73,21 +91,24 @@ export class TenantInvitationsService {
   async listMine(userId: bigint): Promise<TenantInvitationResponseDto[]> {
     return this.withUserContext(userId, async (tx) => {
       const authUser = await this.getAuthUserOrThrow(tx, userId);
+      const now = new Date();
 
       const invitations = await tx.tenant_invitations.findMany({
         where: {
           email: authUser.email,
-          status: 'PENDING',
-          expires_at: { gt: new Date() },
         },
         orderBy: { created_at: 'desc' },
       });
 
-      return invitations.map((invitation) => this.toResponse(invitation));
+      const ordered = this.sortByStatusPriorityAndDate(invitations, now);
+      return ordered.map((invitation) => this.toResponse(invitation, now));
     });
   }
 
-  async accept(invitationId: bigint, userId: bigint): Promise<TenantInvitationResponseDto> {
+  async accept(
+    invitationId: bigint,
+    userId: bigint,
+  ): Promise<TenantInvitationResponseDto> {
     return this.withUserContext(userId, async (tx) => {
       const authUser = await this.getAuthUserOrThrow(tx, userId);
       const invitation = await this.getInvitationOrThrow(tx, invitationId);
@@ -126,13 +147,17 @@ export class TenantInvitationsService {
     });
   }
 
-  async reject(invitationId: bigint, userId: bigint): Promise<TenantInvitationResponseDto> {
+  async reject(
+    invitationId: bigint,
+    userId: bigint,
+  ): Promise<TenantInvitationResponseDto> {
     return this.withUserContext(userId, async (tx) => {
       const authUser = await this.getAuthUserOrThrow(tx, userId);
       const invitation = await this.getInvitationOrThrow(tx, invitationId);
 
       this.assertInvitationBelongsToUser(invitation.email, authUser.email);
       this.assertInvitationPending(invitation.status);
+      this.assertInvitationNotExpired(invitation.expires_at);
 
       const updatedInvitation = await tx.tenant_invitations.update({
         where: { id_invitation: invitationId },
@@ -143,23 +168,46 @@ export class TenantInvitationsService {
     });
   }
 
-  async listByTenant(tenantId: bigint, userId: bigint): Promise<TenantInvitationResponseDto[]> {
+  async listByTenant(
+    tenantId: bigint,
+    userId: bigint,
+  ): Promise<TenantInvitationResponseDto[]> {
     return this.withUserContext(userId, async (tx) => {
       const membership = await this.getMembershipOrThrow(tx, tenantId, userId);
       this.assertOwnerOrAdmin(membership.role);
+      const now = new Date();
 
       const invitations = await tx.tenant_invitations.findMany({
         where: { id_tenant: tenantId },
         orderBy: { created_at: 'desc' },
       });
 
-      return invitations.map((invitation) => this.toResponse(invitation));
+      const ordered = this.sortByStatusPriorityAndDate(invitations, now);
+      return ordered.map((invitation) => this.toResponse(invitation, now));
+    });
+  }
+
+  async listSentMine(userId: bigint): Promise<TenantInvitationResponseDto[]> {
+    return this.withUserContext(userId, async (tx) => {
+      const now = new Date();
+
+      const invitations = await tx.tenant_invitations.findMany({
+        where: {
+          invited_by: userId,
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      const ordered = this.sortByStatusPriorityAndDate(invitations, now);
+      return ordered.map((invitation) => this.toResponse(invitation, now));
     });
   }
 
   parseBigIntId(id: string, fieldName: string): bigint {
     if (!/^\d+$/.test(id)) {
-      throw new BadRequestException(`${fieldName} debe ser un numero entero positivo.`);
+      throw new BadRequestException(
+        `${fieldName} debe ser un numero entero positivo.`,
+      );
     }
     return BigInt(id);
   }
@@ -226,7 +274,10 @@ export class TenantInvitationsService {
     return authUser;
   }
 
-  private async getInvitationOrThrow(tx: Prisma.TransactionClient, invitationId: bigint) {
+  private async getInvitationOrThrow(
+    tx: Prisma.TransactionClient,
+    invitationId: bigint,
+  ) {
     const invitation = await tx.tenant_invitations.findUnique({
       where: { id_invitation: invitationId },
     });
@@ -247,7 +298,9 @@ export class TenantInvitationsService {
       return;
     }
 
-    throw new ForbiddenException('No tiene permisos para crear esta invitacion.');
+    throw new ForbiddenException(
+      'No tiene permisos para crear esta invitacion.',
+    );
   }
 
   private assertOwnerOrAdmin(role: string): void {
@@ -255,18 +308,27 @@ export class TenantInvitationsService {
       return;
     }
 
-    throw new ForbiddenException('No tiene permisos suficientes para esta operacion.');
+    throw new ForbiddenException(
+      'No tiene permisos suficientes para esta operacion.',
+    );
   }
 
-  private assertInvitationBelongsToUser(invitationEmail: string, authUserEmail: string): void {
+  private assertInvitationBelongsToUser(
+    invitationEmail: string,
+    authUserEmail: string,
+  ): void {
     if (invitationEmail !== authUserEmail) {
-      throw new ForbiddenException('La invitacion no pertenece al usuario autenticado.');
+      throw new ForbiddenException(
+        'La invitacion no pertenece al usuario autenticado.',
+      );
     }
   }
 
   private assertInvitationPending(status: string): void {
     if (status !== 'PENDING') {
-      throw new ConflictException('La invitacion ya fue procesada o no esta disponible.');
+      throw new ConflictException(
+        'La invitacion ya fue procesada o no esta disponible.',
+      );
     }
   }
 
@@ -301,7 +363,9 @@ export class TenantInvitationsService {
         throw new ConflictException('La invitacion o membresia ya existe.');
       }
       if (error.code === 'P2003') {
-        throw new BadRequestException('La relacion referencial de la invitacion es invalida.');
+        throw new BadRequestException(
+          'La relacion referencial de la invitacion es invalida.',
+        );
       }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro el registro solicitado.');
@@ -309,22 +373,56 @@ export class TenantInvitationsService {
     }
   }
 
-  private toResponse(invitation: {
-    id_invitation: bigint;
-    id_tenant: bigint;
-    email: string;
-    role: string;
-    status: string;
-    expires_at: Date;
-    invited_by: bigint;
-    created_at: Date;
-  }): TenantInvitationResponseDto {
+  private sortByStatusPriorityAndDate(
+    invitations: InvitationRecord[],
+    now: Date,
+  ): InvitationRecord[] {
+    return [...invitations].sort((a, b) => {
+      const statusA = this.resolveEffectiveStatus(a.status, a.expires_at, now);
+      const statusB = this.resolveEffectiveStatus(b.status, b.expires_at, now);
+
+      const priorityA = this.getStatusPriority(statusA);
+      const priorityB = this.getStatusPriority(statusB);
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      return b.created_at.getTime() - a.created_at.getTime();
+    });
+  }
+
+  private getStatusPriority(status: string): number {
+    const priority = TenantInvitationsService.STATUS_PRIORITY[status];
+    return priority ?? Number.MAX_SAFE_INTEGER;
+  }
+
+  private resolveEffectiveStatus(
+    status: string,
+    expiresAt: Date,
+    now: Date,
+  ): string {
+    if (status === 'PENDING' && expiresAt.getTime() <= now.getTime()) {
+      return 'EXPIRED';
+    }
+    return status;
+  }
+
+  private toResponse(
+    invitation: InvitationRecord,
+    now: Date = new Date(),
+  ): TenantInvitationResponseDto {
+    const effectiveStatus = this.resolveEffectiveStatus(
+      invitation.status,
+      invitation.expires_at,
+      now,
+    );
+
     return {
       idInvitation: Number(invitation.id_invitation),
       idTenant: Number(invitation.id_tenant),
       email: invitation.email,
       role: invitation.role,
-      status: invitation.status,
+      status: effectiveStatus,
       expiresAt: invitation.expires_at,
       invitedBy: Number(invitation.invited_by),
       createdAt: invitation.created_at,

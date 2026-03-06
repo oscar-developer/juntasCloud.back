@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { hash } from 'bcryptjs';
 import { createHash } from 'crypto';
 import { MailService } from '../mail/mail.service';
@@ -329,5 +329,45 @@ describe('AuthService', () => {
         }),
       }),
     );
+  });
+
+  it('change-password actualiza hash cuando la password actual es valida', async () => {
+    const currentHash = await hash('Actual123', 10);
+    prisma.auth_users.findUnique.mockResolvedValue({
+      id_user: 88n,
+      password_hash: currentHash,
+    });
+    prisma.auth_users.update.mockResolvedValue({ id_user: 88n });
+
+    const response = await service.changePassword(88n, {
+      currentPassword: 'Actual123',
+      newPassword: 'NuevaSegura456',
+    });
+
+    expect(response.message).toBe('Contrasena actualizada correctamente.');
+    expect(prisma.auth_users.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id_user: 88n },
+        data: expect.objectContaining({
+          password_hash: expect.any(String),
+        }),
+      }),
+    );
+  });
+
+  it('change-password falla cuando la password actual es incorrecta', async () => {
+    const currentHash = await hash('Actual123', 10);
+    prisma.auth_users.findUnique.mockResolvedValue({
+      id_user: 99n,
+      password_hash: currentHash,
+    });
+
+    await expect(
+      service.changePassword(99n, {
+        currentPassword: 'Incorrecta999',
+        newPassword: 'NuevaSegura456',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.auth_users.update).not.toHaveBeenCalled();
   });
 });

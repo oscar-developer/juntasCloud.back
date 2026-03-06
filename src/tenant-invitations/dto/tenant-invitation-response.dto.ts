@@ -13,7 +13,7 @@ export class TenantInvitationResponseDto {
   @ApiProperty({ enum: ['ADMIN', 'MEMBER'] })
   role!: string;
 
-  @ApiProperty({ enum: ['PENDING', 'ACCEPTED', 'REVOKED'] })
+  @ApiProperty({ enum: ['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED'] })
   status!: string;
 
   @ApiProperty({ example: '2026-03-02T12:00:00.000Z' })

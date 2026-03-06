@@ -27,11 +27,17 @@ import { TenantInvitationsService } from './tenant-invitations.service';
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class TenantInvitationsController {
-  constructor(private readonly tenantInvitationsService: TenantInvitationsService) {}
+  constructor(
+    private readonly tenantInvitationsService: TenantInvitationsService,
+  ) {}
 
   @Post('tenants/:tenantId/invitations')
   @ApiOperation({ summary: 'Crear invitacion para un tenant' })
-  @ApiParam({ name: 'tenantId', type: Number, description: 'id_tenant del tenant destino' })
+  @ApiParam({
+    name: 'tenantId',
+    type: Number,
+    description: 'id_tenant del tenant destino',
+  })
   @ApiCreatedResponse({ type: TenantInvitationResponseDto })
   create(
     @Param('tenantId') tenantId: string,
@@ -46,17 +52,37 @@ export class TenantInvitationsController {
   }
 
   @Get('me/invitations')
-  @ApiOperation({ summary: 'Listar invitaciones pendientes del usuario autenticado' })
+  @ApiOperation({
+    summary:
+      'Listar historial de invitaciones recibidas del usuario autenticado',
+  })
   @ApiOkResponse({ type: TenantInvitationResponseDto, isArray: true })
   listMine(@Req() req: Request): Promise<TenantInvitationResponseDto[]> {
     return this.tenantInvitationsService.listMine(this.getUserId(req));
   }
 
+  @Get('me/invitations/sent')
+  @ApiOperation({
+    summary:
+      'Listar historial de invitaciones realizadas por el usuario autenticado',
+  })
+  @ApiOkResponse({ type: TenantInvitationResponseDto, isArray: true })
+  listSentMine(@Req() req: Request): Promise<TenantInvitationResponseDto[]> {
+    return this.tenantInvitationsService.listSentMine(this.getUserId(req));
+  }
+
   @Post('me/invitations/:id/accept')
   @ApiOperation({ summary: 'Aceptar invitacion' })
-  @ApiParam({ name: 'id', type: Number, description: 'id_invitation de tenant_invitations' })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'id_invitation de tenant_invitations',
+  })
   @ApiOkResponse({ type: TenantInvitationResponseDto })
-  accept(@Param('id') id: string, @Req() req: Request): Promise<TenantInvitationResponseDto> {
+  accept(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ): Promise<TenantInvitationResponseDto> {
     return this.tenantInvitationsService.accept(
       this.tenantInvitationsService.parseBigIntId(id, 'id'),
       this.getUserId(req),
@@ -65,9 +91,16 @@ export class TenantInvitationsController {
 
   @Post('me/invitations/:id/reject')
   @ApiOperation({ summary: 'Rechazar invitacion' })
-  @ApiParam({ name: 'id', type: Number, description: 'id_invitation de tenant_invitations' })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'id_invitation de tenant_invitations',
+  })
   @ApiOkResponse({ type: TenantInvitationResponseDto })
-  reject(@Param('id') id: string, @Req() req: Request): Promise<TenantInvitationResponseDto> {
+  reject(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ): Promise<TenantInvitationResponseDto> {
     return this.tenantInvitationsService.reject(
       this.tenantInvitationsService.parseBigIntId(id, 'id'),
       this.getUserId(req),
@@ -76,7 +109,11 @@ export class TenantInvitationsController {
 
   @Get('tenants/:tenantId/invitations')
   @ApiOperation({ summary: 'Listar invitaciones de un tenant' })
-  @ApiParam({ name: 'tenantId', type: Number, description: 'id_tenant del tenant destino' })
+  @ApiParam({
+    name: 'tenantId',
+    type: Number,
+    description: 'id_tenant del tenant destino',
+  })
   @ApiOkResponse({ type: TenantInvitationResponseDto, isArray: true })
   listByTenant(
     @Param('tenantId') tenantId: string,
@@ -91,7 +128,9 @@ export class TenantInvitationsController {
   private getUserId(req: Request): bigint {
     const user = req.user as { userId?: number } | undefined;
     if (!user?.userId || !Number.isInteger(user.userId) || user.userId <= 0) {
-      throw new UnauthorizedException('Token invalido: user_id ausente o invalido.');
+      throw new UnauthorizedException(
+        'Token invalido: user_id ausente o invalido.',
+      );
     }
     return BigInt(user.userId);
   }

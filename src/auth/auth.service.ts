@@ -20,6 +20,7 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { AuthMessageResponseDto } from './dto/auth-message-response.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 type LoginMetadata = {
   ipAddress: string | null;
@@ -493,6 +494,55 @@ export class AuthService {
         },
         data: { used_at: now },
       });
+    });
+
+    return {
+      message: 'Contrasena actualizada correctamente.',
+    };
+  }
+
+  async changePassword(
+    userId: bigint,
+    dto: ChangePasswordDto,
+  ): Promise<AuthMessageResponseDto> {
+    const currentPassword = this.normalizePassword(dto.currentPassword);
+    const newPassword = this.normalizePassword(dto.newPassword);
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException(
+        'La nueva contrasena debe ser diferente a la contrasena actual.',
+      );
+    }
+
+    const user = await this.prisma.auth_users.findUnique({
+      where: { id_user: userId },
+      select: {
+        id_user: true,
+        password_hash: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Token invalido: usuario no encontrado.');
+    }
+
+    const isCurrentPasswordValid = await compare(
+      currentPassword,
+      user.password_hash,
+    );
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException('La contrasena actual es incorrecta.');
+    }
+
+    const now = new Date();
+    const newPasswordHash = await hash(newPassword, 10);
+
+    await this.prisma.auth_users.update({
+      where: { id_user: user.id_user },
+      data: {
+        password_hash: newPasswordHash,
+        updated_at: now,
+      },
     });
 
     return {

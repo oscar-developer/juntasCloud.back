@@ -88,13 +88,15 @@ model auth_users {
   password_hash                                                       String                @db.VarChar(255)
   estado                                                              String                @default("ACTIVO") @db.VarChar(10)
   email_verified                                                      Boolean               @default(false)
+  last_login_at                                                       DateTime?             @db.Timestamp(6)
+  email_verified_at                                                   DateTime?             @db.Timestamp(6)
   created_at                                                          DateTime              @default(now()) @db.Timestamp(6)
   updated_at                                                          DateTime              @default(now()) @db.Timestamp(6)
-  last_login_at                                                       DateTime?             @db.Timestamp(6)
   asistencia_asamblea_asistencia_asamblea_anulado_by_userToauth_users asistencia_asamblea[] @relation("asistencia_asamblea_anulado_by_userToauth_users")
   asistencia_asamblea_asistencia_asamblea_created_by_userToauth_users asistencia_asamblea[] @relation("asistencia_asamblea_created_by_userToauth_users")
   asistencia_asamblea_asistencia_asamblea_updated_by_userToauth_users asistencia_asamblea[] @relation("asistencia_asamblea_updated_by_userToauth_users")
   auth_login_logs                                                     auth_login_logs[]
+  auth_user_tokens                                                    auth_user_tokens[]
   caja_movimientos_caja_movimientos_anulado_by_userToauth_users       caja_movimientos[]    @relation("caja_movimientos_anulado_by_userToauth_users")
   caja_movimientos_caja_movimientos_created_by_userToauth_users       caja_movimientos[]    @relation("caja_movimientos_created_by_userToauth_users")
   caja_movimientos_caja_movimientos_updated_by_userToauth_users       caja_movimientos[]    @relation("caja_movimientos_updated_by_userToauth_users")
@@ -405,4 +407,22 @@ model terrenos {
   @@id([id_tenant, id_terreno], map: "pk_terrenos00")
   @@index([id_tenant], map: "inx_terrenos00")
   @@index([id_tenant, estado], map: "inx_terrenos01")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auth_user_tokens {
+  id_token   BigInt     @id(map: "pk_auth_user_tokens") @default(autoincrement())
+  id_user    BigInt
+  token_hash String     @db.VarChar(255)
+  token_type String     @db.VarChar(30)
+  expires_at DateTime   @db.Timestamp(6)
+  used_at    DateTime?  @db.Timestamp(6)
+  created_at DateTime   @default(now()) @db.Timestamp(6)
+  created_ip String?    @db.VarChar(45)
+  user_agent String?
+  auth_users auth_users @relation(fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_auth_user_tokens_user")
+
+  @@index([expires_at], map: "inx_auth_user_tokens_expires")
+  @@index([token_type], map: "inx_auth_user_tokens_type")
+  @@index([id_user], map: "inx_auth_user_tokens_user")
 }

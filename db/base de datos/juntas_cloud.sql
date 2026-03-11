@@ -22,7 +22,6 @@ CREATE TABLE auth_users (
   created_at    TIMESTAMP NOT NULL DEFAULT now(),
   updated_at      TIMESTAMP NOT NULL DEFAULT now(),
 
-
   CONSTRAINT pk_auth_users PRIMARY KEY (id_user),
   CONSTRAINT ux_auth_users_email UNIQUE (email),
   CONSTRAINT ck_auth_users_estado CHECK (estado IN ('ACTIVO','INACTIVO'))

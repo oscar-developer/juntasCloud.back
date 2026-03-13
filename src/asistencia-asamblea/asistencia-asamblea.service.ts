@@ -24,7 +24,8 @@ export class AsistenciaAsambleaService {
     dto: CreateAsistenciaAsambleaDto,
   ): Promise<AsistenciaAsambleaResponseDto> {
     return this.withTenantContext(userId, tenantId, async (tx) => {
-      await this.ensureAsambleaExists(tx, tenantId, idAsamblea);
+      const asamblea = await this.ensureAsambleaExists(tx, tenantId, idAsamblea);
+      this.assertAsambleaAllowsAttendance(asamblea.estado, 'registrar');
       await this.ensurePersonaExists(tx, tenantId, BigInt(dto.idPersona));
 
       try {
@@ -36,6 +37,8 @@ export class AsistenciaAsambleaService {
             estado: dto.estado ?? 'PENDIENTE',
             hora_llegada: this.optionalTime(dto.horaLlegada, 'horaLlegada'),
             es_padronado_en_momento: dto.esPadronadoEnMomento,
+            tiene_derecho_voto: dto.tieneDerechoVoto ?? false,
+            voto_emitido: dto.votoEmitido ?? false,
             observaciones: this.nullable(dto.observaciones),
             created_by_user: userId,
           },
@@ -124,6 +127,9 @@ export class AsistenciaAsambleaService {
         throw new BadRequestException('idPersona no se puede editar en este endpoint.');
       }
 
+      const asamblea = await this.ensureAsambleaExists(tx, tenantId, current.id_asamblea);
+      this.assertAsambleaAllowsAttendance(asamblea.estado, 'editar');
+
       const item = await tx.asistencia_asamblea.update({
         where: {
           id_tenant_id_asistencia: {
@@ -138,6 +144,8 @@ export class AsistenciaAsambleaService {
               ? this.optionalTime(dto.horaLlegada, 'horaLlegada')
               : undefined,
           es_padronado_en_momento: dto.esPadronadoEnMomento,
+          tiene_derecho_voto: dto.tieneDerechoVoto,
+          voto_emitido: dto.votoEmitido,
           observaciones:
             dto.observaciones !== undefined ? this.nullable(dto.observaciones) : undefined,
           updated_at: new Date(),
@@ -172,6 +180,9 @@ export class AsistenciaAsambleaService {
         throw new ConflictException('La asistencia de asamblea ya se encuentra anulada.');
       }
 
+      const asamblea = await this.ensureAsambleaExists(tx, tenantId, current.id_asamblea);
+      this.assertAsambleaAllowsAttendance(asamblea.estado, 'anular');
+
       const item = await tx.asistencia_asamblea.update({
         where: {
           id_tenant_id_asistencia: {
@@ -184,6 +195,8 @@ export class AsistenciaAsambleaService {
           anulado_at: new Date(),
           anulado_by_user: userId,
           motivo_anulacion: this.required(dto.motivoAnulacion, 'motivoAnulacion'),
+          updated_at: new Date(),
+          updated_by_user: userId,
         },
       });
 
@@ -225,14 +238,15 @@ export class AsistenciaAsambleaService {
     tx: Prisma.TransactionClient,
     tenantId: bigint,
     idAsamblea: bigint,
-  ): Promise<void> {
+  ): Promise<{ id_asamblea: bigint; estado: string }> {
     const exists = await tx.asambleas.findUnique({
       where: { id_tenant_id_asamblea: { id_tenant: tenantId, id_asamblea: idAsamblea } },
-      select: { id_asamblea: true },
+      select: { id_asamblea: true, estado: true },
     });
     if (!exists) {
       throw new NotFoundException('La asamblea indicada no existe en el tenant activo.');
     }
+    return exists;
   }
 
   private async ensurePersonaExists(
@@ -242,10 +256,26 @@ export class AsistenciaAsambleaService {
   ): Promise<void> {
     const exists = await tx.personas.findUnique({
       where: { id_tenant_id_persona: { id_tenant: tenantId, id_persona: idPersona } },
-      select: { id_persona: true },
+      select: { id_persona: true, estado: true },
     });
     if (!exists) {
       throw new NotFoundException('La persona indicada no existe en el tenant activo.');
+    }
+    if (exists.estado === 'RETIRADO' || exists.estado === 'FALLECIDO') {
+      throw new ConflictException(
+        'La persona indicada no puede registrar asistencia por su estado actual.',
+      );
+    }
+  }
+
+  private assertAsambleaAllowsAttendance(
+    estado: string,
+    action: 'registrar' | 'editar' | 'anular',
+  ): void {
+    if (estado === 'CANCELADA' || estado === 'CERRADA') {
+      throw new ConflictException(
+        `No se puede ${action} una asistencia porque la asamblea no admite cambios en su estado actual.`,
+      );
     }
   }
 
@@ -290,6 +320,8 @@ export class AsistenciaAsambleaService {
     estado: string;
     hora_llegada: Date | null;
     es_padronado_en_momento: boolean;
+    tiene_derecho_voto: boolean;
+    voto_emitido: boolean;
     observaciones: string | null;
     created_at: Date;
     created_by_user: bigint;
@@ -308,6 +340,8 @@ export class AsistenciaAsambleaService {
       estado: item.estado,
       horaLlegada: item.hora_llegada,
       esPadronadoEnMomento: item.es_padronado_en_momento,
+      tieneDerechoVoto: item.tiene_derecho_voto,
+      votoEmitido: item.voto_emitido,
       observaciones: item.observaciones,
       createdAt: item.created_at,
       createdByUser: Number(item.created_by_user),

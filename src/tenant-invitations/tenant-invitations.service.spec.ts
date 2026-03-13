@@ -147,6 +147,74 @@ describe('TenantInvitationsService', () => {
     expect(result.map((x) => x.status)).toEqual(['ACCEPTED', 'EXPIRED']);
   });
 
+  it('create guarda token_hash y expira invitaciones pendientes vencidas del mismo email', async () => {
+    const now = Date.now();
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      tenant_users: {
+        findFirst: jest.fn().mockResolvedValue({
+          id_tenant: 50n,
+          id_user: 9n,
+          role: 'OWNER',
+          estado: 'ACTIVO',
+        }),
+      },
+      tenant_invitations: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({
+          id_invitation: 30n,
+          id_tenant: 50n,
+          email: 'nuevo@test.com',
+          role: 'MEMBER',
+          status: 'PENDING',
+          expires_at: new Date(now + 48 * 60 * 60 * 1000),
+          accepted_at: null,
+          revoked_at: null,
+          invited_by: 9n,
+          created_at: new Date(now),
+        }),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    const result = await service.create(50n, 9n, {
+      email: ' Nuevo@Test.com ',
+      role: 'MEMBER',
+    });
+
+    expect(tx.tenant_invitations.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id_tenant: 50n,
+          email: 'nuevo@test.com',
+          status: 'PENDING',
+        }),
+        data: { status: 'EXPIRED' },
+      }),
+    );
+    expect(tx.tenant_invitations.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          id_tenant: 50n,
+          email: 'nuevo@test.com',
+          role: 'MEMBER',
+          token_hash: expect.any(String),
+          status: 'PENDING',
+          invited_by: 9n,
+        }),
+      }),
+    );
+    expect(
+      (tx.tenant_invitations.create.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data,
+    ).not.toHaveProperty('token');
+    expect(result.acceptedAt).toBeNull();
+    expect(result.revokedAt).toBeNull();
+  });
+
   it('accept falla cuando la invitacion esta expirada', async () => {
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(1),
@@ -164,10 +232,25 @@ describe('TenantInvitationsService', () => {
           role: 'MEMBER',
           status: 'PENDING',
           expires_at: new Date(Date.now() - 1_000),
+          accepted_at: null,
+          revoked_at: null,
           invited_by: 2n,
           created_at: new Date(Date.now() - 60_000),
         }),
-        update: jest.fn(),
+        update: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id_invitation: 15n,
+            id_tenant: 99n,
+            email: 'me@test.com',
+            role: 'MEMBER',
+            status: 'EXPIRED',
+            expires_at: new Date(Date.now() - 1_000),
+            accepted_at: null,
+            revoked_at: null,
+            invited_by: 2n,
+            created_at: new Date(Date.now() - 60_000),
+          }),
       },
       tenant_users: {
         findFirst: jest.fn(),
@@ -184,7 +267,10 @@ describe('TenantInvitationsService', () => {
     );
     expect(tx.tenant_users.findFirst).not.toHaveBeenCalled();
     expect(tx.tenant_users.create).not.toHaveBeenCalled();
-    expect(tx.tenant_invitations.update).not.toHaveBeenCalled();
+    expect(tx.tenant_invitations.update).toHaveBeenCalledWith({
+      where: { id_invitation: 15n },
+      data: { status: 'EXPIRED' },
+    });
   });
 
   it('reject falla cuando la invitacion esta expirada', async () => {
@@ -204,10 +290,25 @@ describe('TenantInvitationsService', () => {
           role: 'MEMBER',
           status: 'PENDING',
           expires_at: new Date(Date.now() - 5_000),
+          accepted_at: null,
+          revoked_at: null,
           invited_by: 2n,
           created_at: new Date(Date.now() - 60_000),
         }),
-        update: jest.fn(),
+        update: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id_invitation: 18n,
+            id_tenant: 110n,
+            email: 'me@test.com',
+            role: 'MEMBER',
+            status: 'EXPIRED',
+            expires_at: new Date(Date.now() - 5_000),
+            accepted_at: null,
+            revoked_at: null,
+            invited_by: 2n,
+            created_at: new Date(Date.now() - 60_000),
+          }),
       },
     };
 
@@ -218,7 +319,10 @@ describe('TenantInvitationsService', () => {
     await expect(service.reject(18n, 6n)).rejects.toBeInstanceOf(
       ConflictException,
     );
-    expect(tx.tenant_invitations.update).not.toHaveBeenCalled();
+    expect(tx.tenant_invitations.update).toHaveBeenCalledWith({
+      where: { id_invitation: 18n },
+      data: { status: 'EXPIRED' },
+    });
   });
 
   it('accept mantiene validacion de pertenencia por email', async () => {
@@ -238,6 +342,8 @@ describe('TenantInvitationsService', () => {
           role: 'MEMBER',
           status: 'PENDING',
           expires_at: new Date(Date.now() + 60_000),
+          accepted_at: null,
+          revoked_at: null,
           invited_by: 2n,
           created_at: new Date(Date.now() - 60_000),
         }),
@@ -275,6 +381,8 @@ describe('TenantInvitationsService', () => {
           role: 'MEMBER',
           status: 'PENDING',
           expires_at: new Date(Date.now() + 60_000),
+          accepted_at: null,
+          revoked_at: null,
           invited_by: 2n,
           created_at: new Date(Date.now() - 60_000),
         }),
@@ -290,5 +398,131 @@ describe('TenantInvitationsService', () => {
       ForbiddenException,
     );
     expect(tx.tenant_invitations.update).not.toHaveBeenCalled();
+  });
+
+  it('accept marca accepted_at en invitacion y membresia', async () => {
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      auth_users: {
+        findUnique: jest.fn().mockResolvedValue({
+          id_user: 11n,
+          email: 'me@test.com',
+        }),
+      },
+      tenant_invitations: {
+        findUnique: jest.fn().mockResolvedValue({
+          id_invitation: 40n,
+          id_tenant: 77n,
+          email: 'me@test.com',
+          role: 'ADMIN',
+          status: 'PENDING',
+          expires_at: new Date(Date.now() + 60_000),
+          accepted_at: null,
+          revoked_at: null,
+          invited_by: 2n,
+          created_at: new Date(Date.now() - 60_000),
+        }),
+        update: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+          id_invitation: 40n,
+          id_tenant: 77n,
+          email: 'me@test.com',
+          role: 'ADMIN',
+          status: data.status,
+          expires_at: new Date(Date.now() + 60_000),
+          accepted_at: data.accepted_at ?? null,
+          revoked_at: null,
+          invited_by: 2n,
+          created_at: new Date(Date.now() - 60_000),
+        })),
+      },
+      tenant_users: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue(undefined),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    const result = await service.accept(40n, 11n);
+
+    expect(tx.tenant_users.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          id_tenant: 77n,
+          id_user: 11n,
+          role: 'ADMIN',
+          estado: 'ACTIVO',
+          invited_by: 2n,
+          accepted_at: expect.any(Date),
+        }),
+      }),
+    );
+    expect(tx.tenant_invitations.update).toHaveBeenCalledWith({
+      where: { id_invitation: 40n },
+      data: {
+        status: 'ACCEPTED',
+        accepted_at: expect.any(Date),
+      },
+    });
+    expect(result.status).toBe('ACCEPTED');
+    expect(result.acceptedAt).toBeInstanceOf(Date);
+    expect(result.revokedAt).toBeNull();
+  });
+
+  it('reject marca revoked_at en la invitacion', async () => {
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      auth_users: {
+        findUnique: jest.fn().mockResolvedValue({
+          id_user: 12n,
+          email: 'me@test.com',
+        }),
+      },
+      tenant_invitations: {
+        findUnique: jest.fn().mockResolvedValue({
+          id_invitation: 41n,
+          id_tenant: 78n,
+          email: 'me@test.com',
+          role: 'MEMBER',
+          status: 'PENDING',
+          expires_at: new Date(Date.now() + 60_000),
+          accepted_at: null,
+          revoked_at: null,
+          invited_by: 2n,
+          created_at: new Date(Date.now() - 60_000),
+        }),
+        update: jest.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+          id_invitation: 41n,
+          id_tenant: 78n,
+          email: 'me@test.com',
+          role: 'MEMBER',
+          status: data.status,
+          expires_at: new Date(Date.now() + 60_000),
+          accepted_at: null,
+          revoked_at: data.revoked_at ?? null,
+          invited_by: 2n,
+          created_at: new Date(Date.now() - 60_000),
+        })),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    const result = await service.reject(41n, 12n);
+
+    expect(tx.tenant_invitations.update).toHaveBeenCalledWith({
+      where: { id_invitation: 41n },
+      data: {
+        status: 'REVOKED',
+        revoked_at: expect.any(Date),
+      },
+    });
+    expect(result.status).toBe('REVOKED');
+    expect(result.acceptedAt).toBeNull();
+    expect(result.revokedAt).toBeInstanceOf(Date);
   });
 });

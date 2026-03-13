@@ -14,6 +14,23 @@ import { PaginatedCajaMovimientosResponseDto } from './dto/paginated-caja-movimi
 import { QueryCajaMovimientosDto } from './dto/query-caja-movimientos.dto';
 import { UpdateCajaMovimientoDto } from './dto/update-caja-movimiento.dto';
 
+const cajaMovimientoWithCategoria = Prisma.validator<Prisma.caja_movimientosDefaultArgs>()({
+  include: {
+    caja_categorias: {
+      select: {
+        id_categoria_caja: true,
+        nombre: true,
+        tipo: true,
+        activo: true,
+      },
+    },
+  },
+});
+
+type CajaMovimientoWithCategoria = Prisma.caja_movimientosGetPayload<
+  typeof cajaMovimientoWithCategoria
+>;
+
 @Injectable()
 export class CajaMovimientosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -25,14 +42,22 @@ export class CajaMovimientosService {
   ): Promise<CajaMovimientoResponseDto> {
     return this.withTenantContext(userId, tenantId, async (tx) => {
       await this.ensureOptionalReferences(tx, tenantId, dto);
+      const categoria = await this.ensureCategoriaCaja(
+        tx,
+        tenantId,
+        BigInt(dto.idCategoriaCaja),
+        dto.tipo,
+        true,
+      );
 
       const item = await tx.caja_movimientos.create({
+        include: cajaMovimientoWithCategoria.include,
         data: {
           id_tenant: tenantId,
           fecha: this.toDate(dto.fecha, 'fecha'),
           tipo: dto.tipo,
           monto: dto.monto,
-          categoria: dto.categoria,
+          id_categoria_caja: categoria.id_categoria_caja,
           id_persona: dto.idPersona ? BigInt(dto.idPersona) : null,
           id_faena: dto.idFaena ? BigInt(dto.idFaena) : null,
           id_asamblea: dto.idAsamblea ? BigInt(dto.idAsamblea) : null,
@@ -62,7 +87,7 @@ export class CajaMovimientosService {
         id_tenant: tenantId,
         fecha: from || to ? { gte: from, lte: to } : undefined,
         tipo: query.tipo,
-        categoria: query.categoria,
+        id_categoria_caja: query.idCategoriaCaja ? BigInt(query.idCategoriaCaja) : undefined,
         medio_pago: query.medioPago,
         anulado: query.anulado,
         id_persona: query.idPersona ? BigInt(query.idPersona) : undefined,
@@ -72,6 +97,7 @@ export class CajaMovimientosService {
       const usePagination = query.page !== undefined && query.limit !== undefined;
       if (!usePagination) {
         const items = await tx.caja_movimientos.findMany({
+          include: cajaMovimientoWithCategoria.include,
           where,
           orderBy: { id_movimiento: 'desc' },
         });
@@ -83,6 +109,7 @@ export class CajaMovimientosService {
       const [total, items] = await Promise.all([
         tx.caja_movimientos.count({ where }),
         tx.caja_movimientos.findMany({
+          include: cajaMovimientoWithCategoria.include,
           where,
           orderBy: { id_movimiento: 'desc' },
           skip: (page - 1) * limit,
@@ -106,6 +133,7 @@ export class CajaMovimientosService {
   ): Promise<CajaMovimientoResponseDto> {
     const item = await this.withTenantContext(userId, tenantId, (tx) =>
       tx.caja_movimientos.findUnique({
+        include: cajaMovimientoWithCategoria.include,
         where: {
           id_tenant_id_movimiento: {
             id_tenant: tenantId,
@@ -146,8 +174,20 @@ export class CajaMovimientosService {
       }
 
       await this.ensureOptionalReferences(tx, tenantId, dto);
+      const nextTipo = dto.tipo ?? current.tipo;
+      const nextCategoriaId = dto.idCategoriaCaja
+        ? BigInt(dto.idCategoriaCaja)
+        : current.id_categoria_caja;
+      const categoria = await this.ensureCategoriaCaja(
+        tx,
+        tenantId,
+        nextCategoriaId,
+        nextTipo,
+        dto.idCategoriaCaja !== undefined,
+      );
 
       const item = await tx.caja_movimientos.update({
+        include: cajaMovimientoWithCategoria.include,
         where: {
           id_tenant_id_movimiento: {
             id_tenant: tenantId,
@@ -158,7 +198,7 @@ export class CajaMovimientosService {
           fecha: dto.fecha !== undefined ? this.toDate(dto.fecha, 'fecha') : undefined,
           tipo: dto.tipo,
           monto: dto.monto,
-          categoria: dto.categoria,
+          id_categoria_caja: dto.idCategoriaCaja !== undefined ? categoria.id_categoria_caja : undefined,
           id_persona: dto.idPersona !== undefined ? BigInt(dto.idPersona) : undefined,
           id_faena: dto.idFaena !== undefined ? BigInt(dto.idFaena) : undefined,
           id_asamblea: dto.idAsamblea !== undefined ? BigInt(dto.idAsamblea) : undefined,
@@ -202,6 +242,7 @@ export class CajaMovimientosService {
       }
 
       const item = await tx.caja_movimientos.update({
+        include: cajaMovimientoWithCategoria.include,
         where: {
           id_tenant_id_movimiento: {
             id_tenant: tenantId,
@@ -213,6 +254,8 @@ export class CajaMovimientosService {
           anulado_at: new Date(),
           anulado_by_user: userId,
           motivo_anulacion: this.required(dto.motivoAnulacion, 'motivoAnulacion'),
+          updated_at: new Date(),
+          updated_by_user: userId,
         },
       });
 
@@ -301,6 +344,43 @@ export class CajaMovimientosService {
     }
   }
 
+  private async ensureCategoriaCaja(
+    tx: Prisma.TransactionClient,
+    tenantId: bigint,
+    categoriaId: bigint,
+    tipo: string,
+    requireActive: boolean,
+  ): Promise<{ id_categoria_caja: bigint; nombre: string; tipo: string; activo: boolean }> {
+    const categoria = await tx.caja_categorias.findUnique({
+      where: {
+        id_tenant_id_categoria_caja: {
+          id_tenant: tenantId,
+          id_categoria_caja: categoriaId,
+        },
+      },
+      select: {
+        id_categoria_caja: true,
+        nombre: true,
+        tipo: true,
+        activo: true,
+      },
+    });
+
+    if (!categoria) {
+      throw new NotFoundException('La categoria de caja indicada no existe en el tenant activo.');
+    }
+    if (requireActive && !categoria.activo) {
+      throw new ConflictException('La categoria de caja indicada se encuentra inactiva.');
+    }
+    if (categoria.tipo !== tipo) {
+      throw new BadRequestException(
+        'La categoria de caja indicada no corresponde al tipo de movimiento seleccionado.',
+      );
+    }
+
+    return categoria;
+  }
+
   private required(value: string, field: string): string {
     const normalized = value?.trim();
     if (!normalized) {
@@ -323,38 +403,15 @@ export class CajaMovimientosService {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   }
 
-  private toResponse(item: {
-    id_tenant: bigint;
-    id_movimiento: bigint;
-    fecha: Date;
-    tipo: string;
-    monto: Prisma.Decimal;
-    categoria: string;
-    id_persona: bigint | null;
-    id_faena: bigint | null;
-    id_asamblea: bigint | null;
-    id_bien: bigint | null;
-    id_user: bigint;
-    descripcion: string | null;
-    medio_pago: string;
-    doc_referencia: string | null;
-    observaciones: string | null;
-    created_at: Date;
-    created_by_user: bigint;
-    updated_at: Date | null;
-    updated_by_user: bigint | null;
-    anulado: boolean;
-    anulado_at: Date | null;
-    anulado_by_user: bigint | null;
-    motivo_anulacion: string | null;
-  }): CajaMovimientoResponseDto {
+  private toResponse(item: CajaMovimientoWithCategoria): CajaMovimientoResponseDto {
     return {
       idTenant: Number(item.id_tenant),
       idMovimiento: Number(item.id_movimiento),
       fecha: item.fecha,
       tipo: item.tipo,
       monto: Number(item.monto),
-      categoria: item.categoria,
+      idCategoriaCaja: Number(item.id_categoria_caja),
+      categoriaNombre: item.caja_categorias.nombre,
       idPersona: item.id_persona === null ? null : Number(item.id_persona),
       idFaena: item.id_faena === null ? null : Number(item.id_faena),
       idAsamblea: item.id_asamblea === null ? null : Number(item.id_asamblea),

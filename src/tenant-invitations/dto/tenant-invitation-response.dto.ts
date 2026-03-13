@@ -19,6 +19,12 @@ export class TenantInvitationResponseDto {
   @ApiProperty({ example: '2026-03-02T12:00:00.000Z' })
   expiresAt!: Date;
 
+  @ApiProperty({ nullable: true, example: '2026-03-01T12:00:00.000Z' })
+  acceptedAt!: Date | null;
+
+  @ApiProperty({ nullable: true, example: '2026-03-01T12:00:00.000Z' })
+  revokedAt!: Date | null;
+
   @ApiProperty({ example: 1 })
   invitedBy!: number;
 

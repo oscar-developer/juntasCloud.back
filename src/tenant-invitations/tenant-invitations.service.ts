@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTenantInvitationDto } from './dto/create-tenant-invitation.dto';
 import { TenantInvitationResponseDto } from './dto/tenant-invitation-response.dto';
@@ -30,6 +30,8 @@ type InvitationRecord = {
   role: string;
   status: string;
   expires_at: Date;
+  accepted_at: Date | null;
+  revoked_at: Date | null;
   invited_by: bigint;
   created_at: Date;
 };
@@ -56,13 +58,16 @@ export class TenantInvitationsService {
     return this.withUserContext(userId, async (tx) => {
       const membership = await this.getMembershipOrThrow(tx, tenantId, userId);
       this.assertCanInvite(membership.role, dto.role);
+      const now = new Date();
+
+      await this.expirePendingInvitations(tx, tenantId, normalizedEmail, now);
 
       const existing = await tx.tenant_invitations.findFirst({
         where: {
           id_tenant: tenantId,
           email: normalizedEmail,
           status: 'PENDING',
-          expires_at: { gt: new Date() },
+          expires_at: { gt: now },
         },
       });
 
@@ -72,14 +77,16 @@ export class TenantInvitationsService {
         );
       }
 
+      const tokenHash = this.hashToken(randomBytes(32).toString('base64url'));
+
       const invitation = await tx.tenant_invitations.create({
         data: {
           id_tenant: tenantId,
           email: normalizedEmail,
           role: dto.role,
-          token: randomBytes(32).toString('base64url'),
+          token_hash: tokenHash,
           status: 'PENDING',
-          expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          expires_at: new Date(now.getTime() + 48 * 60 * 60 * 1000),
           invited_by: userId,
         },
       });
@@ -111,11 +118,9 @@ export class TenantInvitationsService {
   ): Promise<TenantInvitationResponseDto> {
     return this.withUserContext(userId, async (tx) => {
       const authUser = await this.getAuthUserOrThrow(tx, userId);
-      const invitation = await this.getInvitationOrThrow(tx, invitationId);
+      const invitation = await this.getActiveInvitationOrThrow(tx, invitationId);
 
       this.assertInvitationBelongsToUser(invitation.email, authUser.email);
-      this.assertInvitationPending(invitation.status);
-      this.assertInvitationNotExpired(invitation.expires_at);
 
       const existingMembership = await tx.tenant_users.findFirst({
         where: {
@@ -128,19 +133,25 @@ export class TenantInvitationsService {
         throw new ConflictException('El usuario ya pertenece a este tenant.');
       }
 
+      const now = new Date();
+
       await tx.tenant_users.create({
         data: {
           id_tenant: invitation.id_tenant,
           id_user: userId,
           role: invitation.role,
           estado: 'ACTIVO',
+          accepted_at: now,
           invited_by: invitation.invited_by,
         },
       });
 
       const updatedInvitation = await tx.tenant_invitations.update({
         where: { id_invitation: invitationId },
-        data: { status: 'ACCEPTED' },
+        data: {
+          status: 'ACCEPTED',
+          accepted_at: now,
+        },
       });
 
       return this.toResponse(updatedInvitation);
@@ -153,15 +164,17 @@ export class TenantInvitationsService {
   ): Promise<TenantInvitationResponseDto> {
     return this.withUserContext(userId, async (tx) => {
       const authUser = await this.getAuthUserOrThrow(tx, userId);
-      const invitation = await this.getInvitationOrThrow(tx, invitationId);
+      const invitation = await this.getActiveInvitationOrThrow(tx, invitationId);
 
       this.assertInvitationBelongsToUser(invitation.email, authUser.email);
-      this.assertInvitationPending(invitation.status);
-      this.assertInvitationNotExpired(invitation.expires_at);
+      const now = new Date();
 
       const updatedInvitation = await tx.tenant_invitations.update({
         where: { id_invitation: invitationId },
-        data: { status: 'REVOKED' },
+        data: {
+          status: 'REVOKED',
+          revoked_at: now,
+        },
       });
 
       return this.toResponse(updatedInvitation);
@@ -277,7 +290,7 @@ export class TenantInvitationsService {
   private async getInvitationOrThrow(
     tx: Prisma.TransactionClient,
     invitationId: bigint,
-  ) {
+  ): Promise<InvitationRecord> {
     const invitation = await tx.tenant_invitations.findUnique({
       where: { id_invitation: invitationId },
     });
@@ -287,6 +300,19 @@ export class TenantInvitationsService {
     }
 
     return invitation;
+  }
+
+  private async getActiveInvitationOrThrow(
+    tx: Prisma.TransactionClient,
+    invitationId: bigint,
+  ): Promise<InvitationRecord> {
+    const invitation = await this.getInvitationOrThrow(tx, invitationId);
+    const currentInvitation = await this.expirePendingInvitationIfNeeded(tx, invitation);
+
+    this.assertInvitationPending(currentInvitation.status);
+    this.assertInvitationNotExpired(currentInvitation.expires_at);
+
+    return currentInvitation;
   }
 
   private assertCanInvite(actorRole: string, invitedRole: string): void {
@@ -325,6 +351,10 @@ export class TenantInvitationsService {
   }
 
   private assertInvitationPending(status: string): void {
+    if (status === 'EXPIRED') {
+      throw new ConflictException('La invitacion ha expirado.');
+    }
+
     if (status !== 'PENDING') {
       throw new ConflictException(
         'La invitacion ya fue procesada o no esta disponible.',
@@ -357,10 +387,53 @@ export class TenantInvitationsService {
     return normalized;
   }
 
+  private async expirePendingInvitations(
+    tx: Prisma.TransactionClient,
+    tenantId: bigint,
+    email: string,
+    now: Date,
+  ): Promise<void> {
+    await tx.tenant_invitations.updateMany({
+      where: {
+        id_tenant: tenantId,
+        email,
+        status: 'PENDING',
+        expires_at: { lte: now },
+      },
+      data: { status: 'EXPIRED' },
+    });
+  }
+
+  private async expirePendingInvitationIfNeeded(
+    tx: Prisma.TransactionClient,
+    invitation: InvitationRecord,
+  ): Promise<InvitationRecord> {
+    if (invitation.status !== 'PENDING') {
+      return invitation;
+    }
+
+    if (invitation.expires_at.getTime() > Date.now()) {
+      return invitation;
+    }
+
+    await tx.tenant_invitations.update({
+      where: { id_invitation: invitation.id_invitation },
+      data: { status: 'EXPIRED' },
+    });
+
+    throw new ConflictException('La invitacion ha expirado.');
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
   private handleKnownErrors(error: unknown): void {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        throw new ConflictException('La invitacion o membresia ya existe.');
+        throw new ConflictException(
+          'Ya existe una invitacion pendiente para ese email en este tenant.',
+        );
       }
       if (error.code === 'P2003') {
         throw new BadRequestException(
@@ -424,6 +497,8 @@ export class TenantInvitationsService {
       role: invitation.role,
       status: effectiveStatus,
       expiresAt: invitation.expires_at,
+      acceptedAt: invitation.accepted_at,
+      revokedAt: invitation.revoked_at,
       invitedBy: Number(invitation.invited_by),
       createdAt: invitation.created_at,
     };

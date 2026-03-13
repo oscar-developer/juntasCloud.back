@@ -24,7 +24,8 @@ export class FaenaParticipacionesService {
     dto: CreateFaenaParticipacionDto,
   ): Promise<FaenaParticipacionResponseDto> {
     return this.withTenantContext(userId, tenantId, async (tx) => {
-      await this.ensureFaenaExists(tx, tenantId, idFaena);
+      const faena = await this.ensureFaenaExists(tx, tenantId, idFaena);
+      this.assertFaenaAllowsParticipation(faena.estado, 'registrar');
       await this.ensurePersonaExists(tx, tenantId, BigInt(dto.idPersona));
 
       const payload = this.resolveFine(dto.multaGenerada, dto.montoMulta, undefined);
@@ -128,6 +129,9 @@ export class FaenaParticipacionesService {
         throw new BadRequestException('idPersona no se puede editar en este endpoint.');
       }
 
+      const faena = await this.ensureFaenaExists(tx, tenantId, current.id_faena);
+      this.assertFaenaAllowsParticipation(faena.estado, 'editar');
+
       const payload = this.resolveFine(dto.multaGenerada, dto.montoMulta, {
         multaGenerada: current.multa_generada,
         montoMulta: current.monto_multa,
@@ -183,6 +187,9 @@ export class FaenaParticipacionesService {
         throw new ConflictException('La participacion de faena ya se encuentra anulada.');
       }
 
+      const faena = await this.ensureFaenaExists(tx, tenantId, current.id_faena);
+      this.assertFaenaAllowsParticipation(faena.estado, 'anular');
+
       const item = await tx.faena_participacion.update({
         where: {
           id_tenant_id_faena_participacion: {
@@ -195,6 +202,8 @@ export class FaenaParticipacionesService {
           anulado_at: new Date(),
           anulado_by_user: userId,
           motivo_anulacion: this.required(dto.motivoAnulacion, 'motivoAnulacion'),
+          updated_at: new Date(),
+          updated_by_user: userId,
         },
       });
 
@@ -236,14 +245,15 @@ export class FaenaParticipacionesService {
     tx: Prisma.TransactionClient,
     tenantId: bigint,
     idFaena: bigint,
-  ): Promise<void> {
+  ): Promise<{ id_faena: bigint; estado: string }> {
     const exists = await tx.faenas.findUnique({
       where: { id_tenant_id_faena: { id_tenant: tenantId, id_faena: idFaena } },
-      select: { id_faena: true },
+      select: { id_faena: true, estado: true },
     });
     if (!exists) {
       throw new NotFoundException('La faena indicada no existe en el tenant activo.');
     }
+    return exists;
   }
 
   private async ensurePersonaExists(
@@ -253,10 +263,26 @@ export class FaenaParticipacionesService {
   ): Promise<void> {
     const exists = await tx.personas.findUnique({
       where: { id_tenant_id_persona: { id_tenant: tenantId, id_persona: idPersona } },
-      select: { id_persona: true },
+      select: { id_persona: true, estado: true },
     });
     if (!exists) {
       throw new NotFoundException('La persona indicada no existe en el tenant activo.');
+    }
+    if (exists.estado === 'RETIRADO' || exists.estado === 'FALLECIDO') {
+      throw new ConflictException(
+        'La persona indicada no puede registrar participacion en faena por su estado actual.',
+      );
+    }
+  }
+
+  private assertFaenaAllowsParticipation(
+    estado: string,
+    action: 'registrar' | 'editar' | 'anular',
+  ): void {
+    if (estado === 'CANCELADA') {
+      throw new ConflictException(
+        `No se puede ${action} una participacion porque la faena se encuentra cancelada.`,
+      );
     }
   }
 

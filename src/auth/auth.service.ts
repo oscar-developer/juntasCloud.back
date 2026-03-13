@@ -44,12 +44,8 @@ export class AuthService {
     dto: LoginDto,
     metadata: LoginMetadata,
   ): Promise<LoginResponseDto> {
-    const email = dto.email?.trim().toLowerCase();
-    const password = dto.password;
-
-    if (!email || !password) {
-      throw new BadRequestException('email y password son obligatorios.');
-    }
+    const email = this.normalizeEmail(dto.email);
+    const password = this.normalizePassword(dto.password);
 
     const user = await this.prisma.auth_users.findUnique({
       where: { email },
@@ -210,9 +206,10 @@ export class AuthService {
             id_user: createdUser.id_user,
             token_type: AuthService.VERIFY_EMAIL_TOKEN_TYPE,
             used_at: null,
+            revoked_at: null,
             expires_at: { gt: now },
           },
-          data: { used_at: now },
+          data: { revoked_at: now },
         });
 
         await tx.auth_user_tokens.create({
@@ -252,6 +249,7 @@ export class AuthService {
         where: {
           token_hash: tokenHash,
           token_type: AuthService.VERIFY_EMAIL_TOKEN_TYPE,
+          revoked_at: null,
         },
         select: {
           id_token: true,
@@ -299,8 +297,9 @@ export class AuthService {
           id_user: storedToken.id_user,
           token_type: AuthService.VERIFY_EMAIL_TOKEN_TYPE,
           used_at: null,
+          revoked_at: null,
         },
-        data: { used_at: now },
+        data: { revoked_at: now },
       });
     });
 
@@ -345,9 +344,10 @@ export class AuthService {
           id_user: user.id_user,
           token_type: AuthService.VERIFY_EMAIL_TOKEN_TYPE,
           used_at: null,
+          revoked_at: null,
           expires_at: { gt: now },
         },
-        data: { used_at: now },
+        data: { revoked_at: now },
       });
 
       await tx.auth_user_tokens.create({
@@ -407,9 +407,10 @@ export class AuthService {
           id_user: user.id_user,
           token_type: AuthService.RESET_PASSWORD_TOKEN_TYPE,
           used_at: null,
+          revoked_at: null,
           expires_at: { gt: now },
         },
-        data: { used_at: now },
+        data: { revoked_at: now },
       });
 
       await tx.auth_user_tokens.create({
@@ -445,6 +446,7 @@ export class AuthService {
         where: {
           token_hash: tokenHash,
           token_type: AuthService.RESET_PASSWORD_TOKEN_TYPE,
+          revoked_at: null,
         },
         select: {
           id_token: true,
@@ -491,8 +493,9 @@ export class AuthService {
           id_user: storedToken.id_user,
           token_type: AuthService.RESET_PASSWORD_TOKEN_TYPE,
           used_at: null,
+          revoked_at: null,
         },
-        data: { used_at: now },
+        data: { revoked_at: now },
       });
     });
 

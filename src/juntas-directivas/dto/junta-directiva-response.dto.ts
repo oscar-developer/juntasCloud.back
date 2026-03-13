@@ -10,14 +10,20 @@ export class JuntaDirectivaResponseDto {
   @ApiProperty({ example: 'Junta 2026' })
   nombre!: string;
 
+  @ApiProperty({ type: String, nullable: true, example: '2026-02-15T00:00:00.000Z' })
+  fechaEleccion!: Date | null;
+
   @ApiProperty({ example: '2026-03-01T00:00:00.000Z' })
   fechaInicio!: Date;
 
   @ApiProperty({ type: String, nullable: true, example: '2026-12-31T00:00:00.000Z' })
   fechaFin!: Date | null;
 
-  @ApiProperty({ enum: ['VIGENTE', 'CESADA'] })
+  @ApiProperty({ enum: ['VIGENTE', 'CESADA', 'ANULADA', 'PROYECTADA'] })
   estado!: string;
+
+  @ApiProperty({ type: String, nullable: true, example: 'acta-eleccion-2026.pdf' })
+  documentoSustento!: string | null;
 
   @ApiProperty({ type: String, nullable: true, example: 'Observaciones' })
   observaciones!: string | null;

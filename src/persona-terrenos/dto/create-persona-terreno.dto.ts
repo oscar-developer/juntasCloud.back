@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
 
 export class CreatePersonaTerrenoDto {
   @ApiProperty({ type: Number, example: 1 })
@@ -19,9 +19,11 @@ export class CreatePersonaTerrenoDto {
   @IsIn(['PROPIETARIO', 'POSEEDOR', 'COPROPIETARIO', 'FAMILIAR', 'OTRO'])
   tipoRelacion!: 'PROPIETARIO' | 'POSEEDOR' | 'COPROPIETARIO' | 'FAMILIAR' | 'OTRO';
 
-  @ApiPropertyOptional({ type: Number, nullable: true, example: 50 })
+  @ApiPropertyOptional({ type: Number, nullable: true, example: 50, minimum: 0, maximum: 100 })
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
   porcentajeParticipacion?: number | null;
 }

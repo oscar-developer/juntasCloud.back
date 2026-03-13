@@ -12,15 +12,26 @@ export class CreateJuntaDirectivaDto {
   @IsDateString()
   fechaInicio!: string;
 
+  @ApiPropertyOptional({ type: String, nullable: true, example: '2026-02-15' })
+  @IsOptional()
+  @IsDateString()
+  fechaEleccion?: string | null;
+
   @ApiPropertyOptional({ type: String, nullable: true, example: '2026-12-31' })
   @IsOptional()
   @IsDateString()
   fechaFin?: string | null;
 
-  @ApiPropertyOptional({ enum: ['VIGENTE', 'CESADA'] })
+  @ApiPropertyOptional({ enum: ['VIGENTE', 'CESADA', 'ANULADA', 'PROYECTADA'] })
   @IsOptional()
-  @IsIn(['VIGENTE', 'CESADA'])
-  estado?: 'VIGENTE' | 'CESADA';
+  @IsIn(['VIGENTE', 'CESADA', 'ANULADA', 'PROYECTADA'])
+  estado?: 'VIGENTE' | 'CESADA' | 'ANULADA' | 'PROYECTADA';
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'acta-eleccion-2026.pdf', maxLength: 100 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  documentoSustento?: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'Observaciones' })
   @IsOptional()

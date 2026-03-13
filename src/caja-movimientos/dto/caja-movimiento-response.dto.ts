@@ -16,8 +16,11 @@ export class CajaMovimientoResponseDto {
   @ApiProperty({ type: Number, example: 100.5 })
   monto!: number;
 
-  @ApiProperty({ example: 'APORTE' })
-  categoria!: string;
+  @ApiProperty({ example: 1 })
+  idCategoriaCaja!: number;
+
+  @ApiProperty({ example: 'Aporte comunal' })
+  categoriaNombre!: string;
 
   @ApiProperty({ type: Number, nullable: true, example: 1 })
   idPersona!: number | null;

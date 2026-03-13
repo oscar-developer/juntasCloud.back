@@ -1,4 +1,8 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { hash } from 'bcryptjs';
 import { createHash } from 'crypto';
 import { MailService } from '../mail/mail.service';
@@ -89,6 +93,52 @@ describe('AuthService', () => {
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
+  it('login normaliza password y registra acceso exitoso', async () => {
+    const passwordHash = await hash('Secreta123', 10);
+
+    prisma.auth_users.findUnique.mockResolvedValue({
+      id_user: 12n,
+      email: 'user@test.com',
+      nombres: 'Test',
+      apellidos: 'User',
+      email_verified: true,
+      password_hash: passwordHash,
+      estado: 'ACTIVO',
+    });
+    jwtService.signAsync.mockResolvedValue('jwt-token');
+
+    const tx = {
+      auth_users: {
+        update: jest.fn().mockResolvedValue({ id_user: 12n }),
+      },
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    const response = await service.login(
+      {
+        email: ' user@test.com ',
+        password: ' Secreta123 ',
+      },
+      {
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+      },
+    );
+
+    expect(response.accessToken).toBe('jwt-token');
+    expect(prisma.auth_users.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { email: 'user@test.com' },
+      }),
+    );
+    expect(tx.auth_users.update).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+  });
+
   it('registra usuario, genera token hash y envia correo de verificacion', async () => {
     prisma.auth_users.findUnique.mockResolvedValue(null);
     mailService.sendEmailVerification.mockResolvedValue(undefined);
@@ -126,6 +176,15 @@ describe('AuthService', () => {
       'Te enviamos un correo para verificar tu cuenta.',
     );
     expect(tx.auth_users.create).toHaveBeenCalledTimes(1);
+    expect(tx.auth_user_tokens.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { revoked_at: expect.any(Date) },
+        where: expect.objectContaining({
+          revoked_at: null,
+          used_at: null,
+        }),
+      }),
+    );
     expect(tx.auth_user_tokens.create).toHaveBeenCalledTimes(1);
     expect(mailService.sendEmailVerification).toHaveBeenCalledTimes(1);
 
@@ -170,6 +229,18 @@ describe('AuthService', () => {
         where: expect.objectContaining({
           token_hash: tokenHash,
           token_type: 'VERIFY_EMAIL',
+          revoked_at: null,
+        }),
+      }),
+    );
+    expect(tx.auth_user_tokens.updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: { revoked_at: expect.any(Date) },
+        where: expect.objectContaining({
+          id_user: 8n,
+          revoked_at: null,
+          used_at: null,
         }),
       }),
     );
@@ -181,6 +252,22 @@ describe('AuthService', () => {
         }),
       }),
     );
+  });
+
+  it('verify-email rechaza token revocado', async () => {
+    const tx = {
+      auth_user_tokens: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    await expect(
+      service.verifyEmail({ token: 'token_revocado' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('responde mensaje generico cuando se reenvia verificacion para correo inexistente', async () => {
@@ -226,6 +313,15 @@ describe('AuthService', () => {
       'Si el correo existe, enviaremos instrucciones.',
     );
     expect(tx.auth_user_tokens.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.auth_user_tokens.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { revoked_at: expect.any(Date) },
+        where: expect.objectContaining({
+          revoked_at: null,
+          used_at: null,
+        }),
+      }),
+    );
     expect(tx.auth_user_tokens.create).toHaveBeenCalledTimes(1);
     expect(mailService.sendEmailVerification).toHaveBeenCalledTimes(1);
   });
@@ -272,6 +368,15 @@ describe('AuthService', () => {
       'Si el correo existe, enviaremos instrucciones para recuperar tu contrasena.',
     );
     expect(tx.auth_user_tokens.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.auth_user_tokens.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { revoked_at: expect.any(Date) },
+        where: expect.objectContaining({
+          revoked_at: null,
+          used_at: null,
+        }),
+      }),
+    );
     expect(tx.auth_user_tokens.create).toHaveBeenCalledTimes(1);
     expect(tx.auth_user_tokens.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -318,6 +423,18 @@ describe('AuthService', () => {
         where: expect.objectContaining({
           token_hash: tokenHash,
           token_type: 'RESET_PASSWORD',
+          revoked_at: null,
+        }),
+      }),
+    );
+    expect(tx.auth_user_tokens.updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: { revoked_at: expect.any(Date) },
+        where: expect.objectContaining({
+          id_user: 77n,
+          revoked_at: null,
+          used_at: null,
         }),
       }),
     );
@@ -329,6 +446,25 @@ describe('AuthService', () => {
         }),
       }),
     );
+  });
+
+  it('reset-password rechaza token revocado', async () => {
+    const tx = {
+      auth_user_tokens: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    await expect(
+      service.resetPassword({
+        token: 'token_revocado',
+        newPassword: 'NuevaClaveSegura2026',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('change-password actualiza hash cuando la password actual es valida', async () => {

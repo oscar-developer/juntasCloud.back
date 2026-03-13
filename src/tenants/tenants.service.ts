@@ -17,18 +17,22 @@ export class TenantsService {
 
   async create(dto: CreateTenantDto, userId: bigint): Promise<TenantResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
+    const nombre = this.normalizeRequiredText(dto.nombre, 'nombre');
+    const tipoDocumento = this.normalizeOptionalText(dto.tipoDocumento, 'tipoDocumento');
+    const numeroDocumento = this.normalizeOptionalText(dto.numeroDocumento, 'numeroDocumento');
+    const observaciones = this.normalizeOptionalText(dto.observaciones, 'observaciones');
 
     try {
       return await this.withUserContext(userId, async (tx) => {
         const tenant = await tx.tenants.create({
           data: {
-            nombre: dto.nombre,
-            ruc: dto.ruc ?? null,
-            dni: dto.dni ?? null,
+            nombre,
+            tipo_documento: tipoDocumento,
+            numero_documento: numeroDocumento,
             estado: dto.estado ?? 'ACTIVO',
-            observaciones: dto.observaciones ?? null,
-            owner_user_id: userId,
+            observaciones,
           },
+          select: this.tenantSelect(),
         });
 
         await tx.tenant_users.create({
@@ -41,7 +45,10 @@ export class TenantsService {
           },
         });
 
-        return this.toResponse(tenant);
+        return this.toResponse({
+          ...tenant,
+          tenant_users: { id_user: userId },
+        });
       });
     } catch (error) {
       this.handleKnownErrors(error);
@@ -52,15 +59,17 @@ export class TenantsService {
   async findAll(query: QueryTenantsDto, userId: bigint): Promise<TenantResponseDto[]> {
     this.ensureEstadoIsValid(query.estado);
 
+    const nombre = this.normalizeFilterText(query.nombre);
     const skip = this.normalizeSkip(query.skip);
     const take = this.normalizeTake(query.take);
 
     const tenants = await this.withUserContext(userId, (tx) =>
       tx.tenants.findMany({
+        select: this.tenantSelect(),
         where: {
-          nombre: query.nombre
+          nombre: nombre
             ? {
-                contains: query.nombre,
+                contains: nombre,
                 mode: 'insensitive',
               }
             : undefined,
@@ -78,6 +87,7 @@ export class TenantsService {
   async findOne(id: bigint, userId: bigint): Promise<TenantResponseDto> {
     const tenant = await this.withUserContext(userId, (tx) =>
       tx.tenants.findUnique({
+        select: this.tenantSelect(),
         where: { id_tenant: id },
       }),
     );
@@ -91,17 +101,29 @@ export class TenantsService {
 
   async update(id: bigint, dto: UpdateTenantDto, userId: bigint): Promise<TenantResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
+    const nombre = this.normalizeOptionalText(dto.nombre, 'nombre');
+    const tipoDocumento = this.normalizeNullableOptionalText(dto.tipoDocumento, 'tipoDocumento');
+    const numeroDocumento = this.normalizeNullableOptionalText(
+      dto.numeroDocumento,
+      'numeroDocumento',
+    );
+    const observaciones = this.normalizeNullableOptionalText(
+      dto.observaciones,
+      'observaciones',
+    );
 
     try {
       const tenant = await this.withUserContext(userId, (tx) =>
         tx.tenants.update({
+          select: this.tenantSelect(),
           where: { id_tenant: id },
           data: {
-            nombre: dto.nombre,
-            ruc: dto.ruc,
-            dni: dto.dni,
+            nombre: nombre ?? undefined,
+            tipo_documento: tipoDocumento,
+            numero_documento: numeroDocumento,
             estado: dto.estado,
-            observaciones: dto.observaciones,
+            observaciones,
+            updated_at: new Date(),
           },
         }),
       );
@@ -116,15 +138,12 @@ export class TenantsService {
   async remove(id: bigint, userId: bigint): Promise<void> {
     try {
       await this.withUserContext(userId, async (tx) => {
-        await tx.tenant_users.deleteMany({
-          where: {
-            id_tenant: id,
-            id_user: userId,
-          },
-        });
-
-        await tx.tenants.delete({
+        await tx.tenants.update({
           where: { id_tenant: id },
+          data: {
+            estado: 'INACTIVO',
+            updated_at: new Date(),
+          },
         });
       });
     } catch (error) {
@@ -186,34 +205,90 @@ export class TenantsService {
       if (error.code === 'P2002') {
         throw new ConflictException('Ya existe un tenant con ese nombre.');
       }
-      if (error.code === 'P2003') {
-        throw new ConflictException('No se puede eliminar el tenant porque tiene relaciones asociadas.');
-      }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro el tenant solicitado.');
       }
     }
   }
 
+  private tenantSelect() {
+    return {
+      id_tenant: true,
+      nombre: true,
+      tipo_documento: true,
+      numero_documento: true,
+      estado: true,
+      created_at: true,
+      observaciones: true,
+      tenant_users: {
+        select: {
+          id_user: true,
+        },
+      },
+    } satisfies Prisma.tenantsSelect;
+  }
+
+  private normalizeFilterText(value?: string): string | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    const normalized = value.trim();
+    return normalized || undefined;
+  }
+
+  private normalizeOptionalText(
+    value: string | null | undefined,
+    field: string,
+  ): string | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    return this.normalizeRequiredText(value, field);
+  }
+
+  private normalizeNullableOptionalText(
+    value: string | null | undefined,
+    field: string,
+  ): string | null | undefined {
+    return this.normalizeOptionalText(value, field);
+  }
+
+  private normalizeRequiredText(value: string, field: string): string {
+    if (typeof value !== 'string') {
+      throw new BadRequestException(`${field} es obligatorio.`);
+    }
+    const normalized = value.trim();
+    if (!normalized) {
+      throw new BadRequestException(`${field} no puede estar vacio.`);
+    }
+    return normalized;
+  }
+
   private toResponse(tenant: {
     id_tenant: bigint;
     nombre: string;
-    ruc: string | null;
-    dni: string | null;
+    tipo_documento: string | null;
+    numero_documento: string | null;
     estado: string;
     created_at: Date;
     observaciones: string | null;
-    owner_user_id: bigint | null;
+    tenant_users?: { id_user: bigint } | null;
   }): TenantResponseDto {
     return {
       idTenant: Number(tenant.id_tenant),
       nombre: tenant.nombre,
-      ruc: tenant.ruc,
-      dni: tenant.dni,
+      tipoDocumento: tenant.tipo_documento,
+      numeroDocumento: tenant.numero_documento,
       estado: tenant.estado,
       createdAt: tenant.created_at,
       observaciones: tenant.observaciones,
-      ownerUserId: tenant.owner_user_id === null ? null : Number(tenant.owner_user_id),
+      ownerUserId:
+        tenant.tenant_users === undefined || tenant.tenant_users === null
+          ? null
+          : Number(tenant.tenant_users.id_user),
     };
   }
 }

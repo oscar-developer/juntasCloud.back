@@ -11,22 +11,6 @@ import {
 } from 'class-validator';
 
 const TIPOS = ['INGRESO', 'GASTO'];
-const CATEGORIAS = [
-  'APORTE',
-  'MULTA_FAENA',
-  'MULTA_ASAMBLEA',
-  'APORTE_VOLUNTARIO',
-  'DONACION',
-  'SALDO_INICIAL_JUNTA_ANTERIOR',
-  'OTRO_INGRESO',
-  'GASTO_OPERATIVO',
-  'MATERIAL_OBRA',
-  'MOVILIDAD',
-  'REUNION',
-  'SERVICIOS',
-  'COMPRA_BIEN',
-  'OTRO_GASTO',
-];
 const MEDIOS_PAGO = ['EFECTIVO', 'TRANSFERENCIA', 'YAPE', 'PLIN', 'OTRO'];
 
 export class CreateCajaMovimientoDto {
@@ -44,9 +28,11 @@ export class CreateCajaMovimientoDto {
   @Min(0.01)
   monto!: number;
 
-  @ApiProperty({ enum: CATEGORIAS })
-  @IsIn(CATEGORIAS)
-  categoria!: (typeof CATEGORIAS)[number];
+  @ApiProperty({ type: Number, example: 1, minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  idCategoriaCaja!: number;
 
   @ApiProperty({ enum: MEDIOS_PAGO })
   @IsIn(MEDIOS_PAGO)

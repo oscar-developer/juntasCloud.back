@@ -31,18 +31,24 @@ export class JuntaMiembrosService {
       await this.ensureJuntaExists(tx, tenantId, idJunta);
       await this.ensurePersonaExists(tx, tenantId, idPersona);
 
-      const item = await tx.junta_miembros.create({
-        data: {
-          id_tenant: tenantId,
-          id_junta: idJunta,
-          id_persona: idPersona,
-          cargo: dto.cargo,
-          fecha_inicio: fechaInicio,
-          fecha_fin: fechaFin,
-        },
-      });
+      try {
+        const item = await tx.junta_miembros.create({
+          data: {
+            id_tenant: tenantId,
+            id_junta: idJunta,
+            id_persona: idPersona,
+            cargo: dto.cargo,
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+            observaciones: this.optionalNullable(dto.observaciones),
+          },
+        });
 
-      return this.toResponse(item);
+        return this.toResponse(item);
+      } catch (error) {
+        this.handleKnown(error, 'No se pudo crear el miembro de junta.');
+        throw error;
+      }
     });
   }
 
@@ -61,6 +67,9 @@ export class JuntaMiembrosService {
           cargo: query.cargo,
           AND: query.vigentes
             ? [
+                {
+                  fecha_inicio: { lte: today },
+                },
                 {
                   OR: [{ fecha_fin: null }, { fecha_fin: { gte: today } }],
                 },
@@ -138,23 +147,32 @@ export class JuntaMiembrosService {
         await this.ensurePersonaExists(tx, tenantId, idPersona);
       }
 
-      const item = await tx.junta_miembros.update({
-        where: {
-          id_tenant_id_junta_miembro: {
-            id_tenant: tenantId,
-            id_junta_miembro: idJuntaMiembro,
+      try {
+        const item = await tx.junta_miembros.update({
+          where: {
+            id_tenant_id_junta_miembro: {
+              id_tenant: tenantId,
+              id_junta_miembro: idJuntaMiembro,
+            },
           },
-        },
-        data: {
-          id_junta: dto.idJunta !== undefined ? idJunta : undefined,
-          id_persona: dto.idPersona !== undefined ? idPersona : undefined,
-          cargo: dto.cargo,
-          fecha_inicio: dto.fechaInicio !== undefined ? fechaInicio : undefined,
-          fecha_fin: dto.fechaFin !== undefined ? fechaFin : undefined,
-        },
-      });
+          data: {
+            id_junta: dto.idJunta !== undefined ? idJunta : undefined,
+            id_persona: dto.idPersona !== undefined ? idPersona : undefined,
+            cargo: dto.cargo,
+            fecha_inicio: dto.fechaInicio !== undefined ? fechaInicio : undefined,
+            fecha_fin: dto.fechaFin !== undefined ? fechaFin : undefined,
+            observaciones:
+              dto.observaciones !== undefined
+                ? this.optionalNullable(dto.observaciones)
+                : undefined,
+          },
+        });
 
-      return this.toResponse(item);
+        return this.toResponse(item);
+      } catch (error) {
+        this.handleKnown(error, 'No se encontro el miembro de junta solicitado.');
+        throw error;
+      }
     });
   }
 
@@ -259,9 +277,25 @@ export class JuntaMiembrosService {
   }
 
   private handleKnown(error: unknown, message: string): void {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new ConflictException(
+        'No puede existir mas de un PRESIDENTE activo para la misma junta directiva.',
+      );
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new NotFoundException(message);
     }
+  }
+
+  private optionalNullable(value?: string | null): string | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    const normalized = value.trim();
+    return normalized || null;
   }
 
   private toResponse(item: {
@@ -272,6 +306,7 @@ export class JuntaMiembrosService {
     cargo: string;
     fecha_inicio: Date;
     fecha_fin: Date | null;
+    observaciones: string | null;
   }): JuntaMiembroResponseDto {
     return {
       idTenant: Number(item.id_tenant),
@@ -281,6 +316,7 @@ export class JuntaMiembrosService {
       cargo: item.cargo,
       fechaInicio: item.fecha_inicio,
       fechaFin: item.fecha_fin,
+      observaciones: item.observaciones,
     };
   }
 }

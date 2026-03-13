@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 const CARGOS = ['PRESIDENTE', 'VICEPRESIDENTE', 'SECRETARIO', 'TESORERO', 'VOCAL', 'OTRO'];
 
@@ -29,4 +29,9 @@ export class CreateJuntaMiembroDto {
   @IsOptional()
   @IsDateString()
   fechaFin?: string | null;
+
+  @ApiPropertyOptional({ example: 'Periodo regular 2026', nullable: true })
+  @IsOptional()
+  @IsString()
+  observaciones?: string | null;
 }

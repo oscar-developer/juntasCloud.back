@@ -24,6 +24,9 @@ export class PersonaTerrenosService {
     return this.withTenantContext(userId, tenantId, async (tx) => {
       const idPersona = BigInt(dto.idPersona);
       const idTerreno = BigInt(dto.idTerreno);
+      const porcentajeParticipacion = this.normalizePorcentajeParticipacion(
+        dto.porcentajeParticipacion,
+      );
       await this.ensurePersonaExists(tx, tenantId, idPersona);
       await this.ensureTerrenoExists(tx, tenantId, idTerreno);
       try {
@@ -33,7 +36,7 @@ export class PersonaTerrenosService {
             id_persona: idPersona,
             id_terreno: idTerreno,
             tipo_relacion: dto.tipoRelacion,
-            porcentaje_participacion: dto.porcentajeParticipacion ?? null,
+            porcentaje_participacion: porcentajeParticipacion,
           },
         });
         return this.toResponse(item);
@@ -91,6 +94,10 @@ export class PersonaTerrenosService {
     dto: UpdatePersonaTerrenoDto,
   ): Promise<PersonaTerrenoResponseDto> {
     return this.withTenantContext(userId, tenantId, async (tx) => {
+      const porcentajeParticipacion =
+        dto.porcentajeParticipacion !== undefined
+          ? this.normalizePorcentajeParticipacion(dto.porcentajeParticipacion)
+          : undefined;
       const current = await tx.persona_terreno.findUnique({
         where: {
           id_tenant_id_persona_terreno: {
@@ -111,8 +118,7 @@ export class PersonaTerrenosService {
         },
         data: {
           tipo_relacion: dto.tipoRelacion,
-          porcentaje_participacion:
-            dto.porcentajeParticipacion !== undefined ? dto.porcentajeParticipacion : undefined,
+          porcentaje_participacion: porcentajeParticipacion,
         },
       });
       return this.toResponse(item);
@@ -207,6 +213,32 @@ export class PersonaTerrenosService {
       throw new ConflictException('La relacion persona-terreno ya existe en este tenant.');
     }
     throw error;
+  }
+
+  private normalizePorcentajeParticipacion(value: number | null | undefined): number | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    if (!Number.isFinite(value)) {
+      throw new BadRequestException(
+        'porcentajeParticipacion debe ser un numero valido entre 0 y 100.',
+      );
+    }
+
+    if (value < 0 || value > 100) {
+      throw new BadRequestException(
+        'porcentajeParticipacion debe estar entre 0 y 100.',
+      );
+    }
+
+    if (!Number.isInteger(value * 100)) {
+      throw new BadRequestException(
+        'porcentajeParticipacion admite como maximo 2 decimales.',
+      );
+    }
+
+    return value;
   }
 
   private toResponse(item: {

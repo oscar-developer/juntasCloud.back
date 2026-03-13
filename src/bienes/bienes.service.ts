@@ -11,12 +11,13 @@ export class BienesService {
   constructor(private readonly prisma: PrismaService) {}
   async create(t: bigint, u: bigint, d: CreateBienDto) {
     const fechaAlta = this.d(d.fechaAlta, 'fechaAlta');
-    const fechaBaja = d.fechaBaja ? this.d(d.fechaBaja, 'fechaBaja') : null;
+    const estado = d.estado ?? 'BUENO';
+    const fechaBaja = this.resolveFechaBaja(estado, d.fechaBaja, 'create');
     this.assertDateOrder(fechaAlta, fechaBaja);
     return this.ctx(u, t, async (tx) => this.res(await tx.bienes.create({ data: {
       id_tenant: t, descripcion: this.req(d.descripcion, 'descripcion'), tipo: this.n(d.tipo), cantidad: d.cantidad,
       valor_estimado: d.valorEstimado ?? null, ubicacion: this.n(d.ubicacion), fecha_alta: fechaAlta, fecha_baja: fechaBaja,
-      estado: d.estado ?? 'BUENO', observaciones: this.n(d.observaciones),
+      estado, observaciones: this.n(d.observaciones),
     } })));
   }
   async findAll(t: bigint, u: bigint, q: QueryBienesDto) {
@@ -36,7 +37,13 @@ export class BienesService {
       const current = await tx.bienes.findUnique({ where: { id_tenant_id_bien: { id_tenant: t, id_bien: id } } });
       if (!current) throw new NotFoundException('No se encontro el bien solicitado.');
       const fechaAlta = d.fechaAlta !== undefined ? this.d(d.fechaAlta, 'fechaAlta') : current.fecha_alta;
-      const fechaBaja = d.fechaBaja !== undefined ? (d.fechaBaja ? this.d(d.fechaBaja, 'fechaBaja') : null) : current.fecha_baja;
+      const estado = d.estado ?? current.estado;
+      const fechaBaja = this.resolveFechaBaja(
+        estado,
+        d.fechaBaja,
+        'update',
+        current.fecha_baja,
+      );
       this.assertDateOrder(fechaAlta, fechaBaja);
       const i = await tx.bienes.update({
         where: { id_tenant_id_bien: { id_tenant: t, id_bien: id } },
@@ -44,7 +51,7 @@ export class BienesService {
           descripcion: d.descripcion !== undefined ? this.req(d.descripcion, 'descripcion') : undefined,
           tipo: this.on(d.tipo), cantidad: d.cantidad, valor_estimado: d.valorEstimado ?? undefined, ubicacion: this.on(d.ubicacion),
           fecha_alta: d.fechaAlta !== undefined ? fechaAlta : undefined, fecha_baja: d.fechaBaja !== undefined ? fechaBaja : undefined,
-          estado: d.estado, observaciones: this.on(d.observaciones),
+          estado: d.estado, observaciones: this.on(d.observaciones), updated_at: new Date(),
         },
       });
       return this.res(i);
@@ -56,7 +63,7 @@ export class BienesService {
       if (!current) throw new NotFoundException('No se encontro el bien solicitado.');
       const i = await tx.bienes.update({
         where: { id_tenant_id_bien: { id_tenant: t, id_bien: id } },
-        data: { estado: 'DADO_DE_BAJA', fecha_baja: current.fecha_baja ?? this.today() },
+        data: { estado: 'DADO_DE_BAJA', fecha_baja: current.fecha_baja ?? this.today(), updated_at: new Date() },
       });
       return this.res(i);
     });
@@ -68,6 +75,27 @@ export class BienesService {
   private on(v?: string | null) { if (v === undefined) return undefined; return this.n(v); }
   private d(v: string, f: string) { const d = new Date(v); if (Number.isNaN(d.getTime())) throw new BadRequestException(`${f} no tiene formato valido.`); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); }
   private today() { const n = new Date(); return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())); }
+  private resolveFechaBaja(
+    estado: string,
+    fechaBajaInput: string | null | undefined,
+    mode: 'create' | 'update',
+    currentFechaBaja: Date | null = null,
+  ) {
+    if (estado === 'DADO_DE_BAJA') {
+      if (fechaBajaInput === undefined) {
+        return mode === 'update' ? currentFechaBaja ?? this.today() : this.today();
+      }
+      return fechaBajaInput ? this.d(fechaBajaInput, 'fechaBaja') : this.today();
+    }
+
+    if (fechaBajaInput !== undefined && fechaBajaInput !== null) {
+      throw new BadRequestException(
+        'fechaBaja solo puede registrarse cuando el estado es DADO_DE_BAJA.',
+      );
+    }
+
+    return mode === 'update' ? currentFechaBaja : null;
+  }
   private assertDateOrder(a: Date, b: Date | null) { if (b && b.getTime() < a.getTime()) throw new BadRequestException('fechaBaja no puede ser menor que fechaAlta.'); }
   private res(i: { id_tenant: bigint; id_bien: bigint; descripcion: string; tipo: string | null; cantidad: number; valor_estimado: Prisma.Decimal | null; ubicacion: string | null; fecha_alta: Date; fecha_baja: Date | null; estado: string; observaciones: string | null; }): BienResponseDto {
     return { idTenant: Number(i.id_tenant), idBien: Number(i.id_bien), descripcion: i.descripcion, tipo: i.tipo, cantidad: i.cantidad, valorEstimado: i.valor_estimado === null ? null : Number(i.valor_estimado), ubicacion: i.ubicacion, fechaAlta: i.fecha_alta, fechaBaja: i.fecha_baja, estado: i.estado, observaciones: i.observaciones };

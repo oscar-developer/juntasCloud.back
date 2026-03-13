@@ -7,11 +7,11 @@ export class TenantResponseDto {
   @ApiProperty({ example: 'Junta Directiva Los Alamos' })
   nombre!: string;
 
-  @ApiProperty({ type: String, nullable: true, example: '20123456789' })
-  ruc!: string | null;
+  @ApiProperty({ type: String, nullable: true, example: 'RUC' })
+  tipoDocumento!: string | null;
 
-  @ApiProperty({ type: String, nullable: true, example: '12345678' })
-  dni!: string | null;
+  @ApiProperty({ type: String, nullable: true, example: '20123456789' })
+  numeroDocumento!: string | null;
 
   @ApiProperty({ enum: ['ACTIVO', 'INACTIVO'] })
   estado!: string;

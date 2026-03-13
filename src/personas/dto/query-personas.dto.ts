@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class QueryPersonasDto {
   @ApiPropertyOptional({ type: String, example: '12345678' })
@@ -8,10 +8,15 @@ export class QueryPersonasDto {
   @IsString()
   dni?: string;
 
-  @ApiPropertyOptional({ enum: ['ACTIVO', 'SUSPENDIDO', 'RETIRADO'] })
+  @ApiPropertyOptional({ type: String, example: 'persona@correo.com' })
   @IsOptional()
-  @IsIn(['ACTIVO', 'SUSPENDIDO', 'RETIRADO'])
-  estado?: 'ACTIVO' | 'SUSPENDIDO' | 'RETIRADO';
+  @IsEmail()
+  email?: string;
+
+  @ApiPropertyOptional({ enum: ['ACTIVO', 'SUSPENDIDO', 'RETIRADO', 'FALLECIDO'] })
+  @IsOptional()
+  @IsIn(['ACTIVO', 'SUSPENDIDO', 'RETIRADO', 'FALLECIDO'])
+  estado?: 'ACTIVO' | 'SUSPENDIDO' | 'RETIRADO' | 'FALLECIDO';
 
   @ApiPropertyOptional({ enum: ['PADRONADO', 'NO_PADRONADO', 'INVITADO'] })
   @IsOptional()

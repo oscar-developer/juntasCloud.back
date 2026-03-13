@@ -19,6 +19,9 @@ export class AuthUserResponseDto {
   @ApiProperty({ example: false })
   emailVerified!: boolean;
 
+  @ApiProperty({ nullable: true, example: '2026-02-24T16:10:00.000Z' })
+  emailVerifiedAt!: Date | null;
+
   @ApiProperty({ example: '2026-02-24T14:00:00.000Z' })
   createdAt!: Date;
 

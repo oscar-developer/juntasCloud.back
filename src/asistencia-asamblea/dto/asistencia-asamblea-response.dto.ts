@@ -22,6 +22,12 @@ export class AsistenciaAsambleaResponseDto {
   @ApiProperty({ example: true })
   esPadronadoEnMomento!: boolean;
 
+  @ApiProperty({ example: false })
+  tieneDerechoVoto!: boolean;
+
+  @ApiProperty({ example: false })
+  votoEmitido!: boolean;
+
   @ApiProperty({ type: String, nullable: true, example: 'Observaciones' })
   observaciones!: string | null;
 

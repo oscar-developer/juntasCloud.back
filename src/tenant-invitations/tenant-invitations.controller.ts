@@ -7,6 +7,8 @@ import {
   Req,
   UnauthorizedException,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -26,6 +28,7 @@ import { TenantInvitationsService } from './tenant-invitations.service';
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller()
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
 export class TenantInvitationsController {
   constructor(
     private readonly tenantInvitationsService: TenantInvitationsService,

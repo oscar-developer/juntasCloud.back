@@ -6,10 +6,11 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -28,6 +29,7 @@ import { QueryAuthUsersDto } from './dto/query-auth-users.dto';
 
 @ApiTags('auth-users')
 @Controller('auth-users')
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
 export class AuthUsersController {
   constructor(private readonly authUsersService: AuthUsersService) {}
 
@@ -45,13 +47,7 @@ export class AuthUsersController {
   @ApiQuery({ name: 'skip', required: false, type: Number })
   @ApiQuery({ name: 'take', required: false, type: Number })
   @ApiOkResponse({ type: AuthUserResponseDto, isArray: true })
-  findAll(
-    @Query('email') email?: string,
-    @Query('estado') estado?: 'ACTIVO' | 'INACTIVO',
-    @Query('skip', new ParseIntPipe({ optional: true })) skip?: number,
-    @Query('take', new ParseIntPipe({ optional: true })) take?: number,
-  ): Promise<AuthUserResponseDto[]> {
-    const query: QueryAuthUsersDto = { email, estado, skip, take };
+  findAll(@Query() query: QueryAuthUsersDto): Promise<AuthUserResponseDto[]> {
     return this.authUsersService.findAll(query);
   }
 

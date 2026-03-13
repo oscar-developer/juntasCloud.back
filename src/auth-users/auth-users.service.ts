@@ -18,20 +18,27 @@ export class AuthUsersService {
 
   async create(dto: CreateAuthUserDto): Promise<AuthUserResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
+    const email = this.normalizeEmail(dto.email);
     const nombres = this.normalizeRequiredText(dto.nombres, 'nombres');
     const apellidos = this.normalizeRequiredText(dto.apellidos, 'apellidos');
     const clave = this.normalizeClave(dto.clave);
+    const { emailVerified, emailVerifiedAt } = this.resolveEmailVerification(
+      dto.emailVerified,
+      dto.emailVerifiedAt,
+      true,
+    );
     const passwordHash = await hash(clave, 10);
 
     try {
       const user = await this.prisma.auth_users.create({
         data: {
-          email: dto.email,
+          email,
           nombres,
           apellidos,
           password_hash: passwordHash,
           estado: dto.estado ?? 'ACTIVO',
-          email_verified: false,
+          email_verified: emailVerified,
+          email_verified_at: emailVerifiedAt,
         },
       });
 
@@ -45,14 +52,15 @@ export class AuthUsersService {
   async findAll(query: QueryAuthUsersDto): Promise<AuthUserResponseDto[]> {
     this.ensureEstadoIsValid(query.estado);
 
+    const email = this.normalizeFilterText(query.email);
     const take = this.normalizeTake(query.take);
     const skip = this.normalizeSkip(query.skip);
 
     const users = await this.prisma.auth_users.findMany({
       where: {
-        email: query.email
+        email: email
           ? {
-              contains: query.email,
+              contains: email,
               mode: 'insensitive',
             }
           : undefined,
@@ -81,22 +89,30 @@ export class AuthUsersService {
   async update(id: bigint, dto: UpdateAuthUserDto): Promise<AuthUserResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
 
+    const email = this.normalizeOptionalEmail(dto.email);
     const lastLoginAt = this.normalizeLastLoginAt(dto.lastLoginAt);
     const nombres = this.normalizeOptionalText(dto.nombres, 'nombres');
     const apellidos = this.normalizeOptionalText(dto.apellidos, 'apellidos');
+    const { emailVerified, emailVerifiedAt } = this.resolveEmailVerification(
+      dto.emailVerified,
+      dto.emailVerifiedAt,
+    );
     const passwordHash =
       dto.clave !== undefined ? await hash(this.normalizeClave(dto.clave), 10) : undefined;
+    const updatedAt = new Date();
 
     try {
       const user = await this.prisma.auth_users.update({
         where: { id_user: id },
         data: {
-          email: dto.email,
+          email,
           nombres,
           apellidos,
           password_hash: passwordHash,
           estado: dto.estado,
-          updated_at: new Date(),
+          email_verified: emailVerified,
+          email_verified_at: emailVerifiedAt,
+          updated_at: updatedAt,
           last_login_at: lastLoginAt,
         },
       });
@@ -148,6 +164,17 @@ export class AuthUsersService {
   }
 
   private normalizeLastLoginAt(value?: string | null): Date | null | undefined {
+    return this.normalizeDateTimeField(value, 'lastLoginAt');
+  }
+
+  private normalizeEmailVerifiedAt(value?: string | null): Date | null | undefined {
+    return this.normalizeDateTimeField(value, 'emailVerifiedAt');
+  }
+
+  private normalizeDateTimeField(
+    value: string | null | undefined,
+    field: string,
+  ): Date | null | undefined {
     if (value === undefined) {
       return undefined;
     }
@@ -156,7 +183,7 @@ export class AuthUsersService {
     }
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
-      throw new BadRequestException('lastLoginAt no tiene formato de fecha valido.');
+      throw new BadRequestException(`${field} no tiene formato de fecha valido.`);
     }
     return parsed;
   }
@@ -181,6 +208,24 @@ export class AuthUsersService {
     return normalized;
   }
 
+  private normalizeEmail(email: string): string {
+    if (typeof email !== 'string') {
+      throw new BadRequestException('email es obligatorio.');
+    }
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) {
+      throw new BadRequestException('email es obligatorio.');
+    }
+    return normalized;
+  }
+
+  private normalizeOptionalEmail(email?: string): string | undefined {
+    if (email === undefined) {
+      return undefined;
+    }
+    return this.normalizeEmail(email);
+  }
+
   private normalizeRequiredText(value: string, field: string): string {
     if (typeof value !== 'string') {
       throw new BadRequestException(`${field} es obligatorio.`);
@@ -199,10 +244,80 @@ export class AuthUsersService {
     return this.normalizeRequiredText(value, field);
   }
 
+  private normalizeFilterText(value?: string): string | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    if (typeof value !== 'string') {
+      throw new BadRequestException('email debe ser texto.');
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return normalized || undefined;
+  }
+
+  private resolveEmailVerification(
+    emailVerified?: boolean,
+    emailVerifiedAt?: string | null,
+    defaultToUnverified = false,
+  ): {
+    emailVerified: boolean | undefined;
+    emailVerifiedAt: Date | null | undefined;
+  } {
+    const normalizedEmailVerifiedAt = this.normalizeEmailVerifiedAt(emailVerifiedAt);
+
+    if (emailVerified === undefined) {
+      if (normalizedEmailVerifiedAt instanceof Date) {
+        return {
+          emailVerified: true,
+          emailVerifiedAt: normalizedEmailVerifiedAt,
+        };
+      }
+
+      if (normalizedEmailVerifiedAt === null) {
+        return {
+          emailVerified: false,
+          emailVerifiedAt: null,
+        };
+      }
+
+      if (defaultToUnverified) {
+        return {
+          emailVerified: false,
+          emailVerifiedAt: null,
+        };
+      }
+
+      return {
+        emailVerified: undefined,
+        emailVerifiedAt: undefined,
+      };
+    }
+
+    if (!emailVerified) {
+      return {
+        emailVerified: false,
+        emailVerifiedAt: null,
+      };
+    }
+
+    return {
+      emailVerified: true,
+      emailVerifiedAt:
+        normalizedEmailVerifiedAt instanceof Date ? normalizedEmailVerifiedAt : new Date(),
+    };
+  }
+
   private handleKnownErrors(error: unknown): void {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
         throw new ConflictException('Ya existe un usuario con ese email.');
+      }
+      if (error.code === 'P2003') {
+        throw new ConflictException(
+          'No se puede completar la operacion porque el usuario tiene registros relacionados.',
+        );
       }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro el usuario solicitado.');
@@ -217,6 +332,7 @@ export class AuthUsersService {
     apellidos: string;
     estado: string;
     email_verified: boolean;
+    email_verified_at: Date | null;
     created_at: Date;
     updated_at: Date;
     last_login_at: Date | null;
@@ -228,6 +344,7 @@ export class AuthUsersService {
       apellidos: user.apellidos,
       estado: user.estado,
       emailVerified: user.email_verified,
+      emailVerifiedAt: user.email_verified_at,
       createdAt: user.created_at,
       updatedAt: user.updated_at,
       lastLoginAt: user.last_login_at,

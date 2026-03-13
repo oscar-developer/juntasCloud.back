@@ -10,22 +10,32 @@ datasource db {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model asambleas {
-  id_tenant           BigInt
-  id_asamblea         BigInt                @default(autoincrement())
-  fecha               DateTime              @db.Timestamp(6)
-  tipo                String                @db.VarChar(15)
-  tema_principal      String                @db.VarChar(200)
-  lugar               String?               @db.VarChar(200)
-  quorum_requerido    Int?
-  observaciones       String?
-  tenants             tenants               @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_asambleas00")
-  asistencia_asamblea asistencia_asamblea[]
-  caja_movimientos    caja_movimientos[]
+  id_tenant            BigInt
+  id_asamblea          BigInt                 @default(autoincrement())
+  fecha_programada     DateTime               @db.Timestamptz(6)
+  hora_inicio_real     DateTime?              @db.Timestamptz(6)
+  hora_fin_real        DateTime?              @db.Timestamptz(6)
+  tipo                 String                 @db.VarChar(15)
+  convocatoria         String?                @db.VarChar(15)
+  estado               String                 @default("PROGRAMADA") @db.VarChar(15)
+  tema_principal       String                 @db.VarChar(200)
+  lugar                String?                @db.VarChar(200)
+  quorum_requerido     Int?
+  quorum_alcanzado     Int?
+  numero_acta          String?                @db.VarChar(50)
+  observaciones        String?
+  cerrada_at           DateTime?              @db.Timestamptz(6)
+  cerrada_by_user      BigInt?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  auth_users           auth_users?            @relation(fields: [cerrada_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_asambleas_cerrada_by")
+  tenants              tenants                @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_asambleas00")
+  asistencia_asamblea  asistencia_asamblea[]
+  caja_movimientos     caja_movimientos[]
+  obligaciones_persona obligaciones_persona[]
 
-  @@id([id_tenant, id_asamblea], map: "pk_asambleas00")
-  @@index([id_tenant], map: "inx_asambleas00")
-  @@index([id_tenant, fecha], map: "inx_asambleas01")
-  @@index([id_tenant, tipo], map: "inx_asambleas02")
+  @@id([id_tenant, id_asamblea], map: "pk_asambleas")
+  @@index([id_tenant, fecha_programada], map: "inx_asambleas_fecha")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -37,37 +47,36 @@ model asistencia_asamblea {
   estado                                                     String      @default("PENDIENTE") @db.VarChar(15)
   hora_llegada                                               DateTime?   @db.Time(6)
   es_padronado_en_momento                                    Boolean
+  tiene_derecho_voto                                         Boolean     @default(false)
+  voto_emitido                                               Boolean     @default(false)
   observaciones                                              String?
-  created_at                                                 DateTime    @default(now()) @db.Timestamp(6)
+  created_at                                                 DateTime    @default(now()) @db.Timestamptz(6)
   created_by_user                                            BigInt
-  updated_at                                                 DateTime?   @db.Timestamp(6)
+  updated_at                                                 DateTime?   @db.Timestamptz(6)
   updated_by_user                                            BigInt?
   anulado                                                    Boolean     @default(false)
-  anulado_at                                                 DateTime?   @db.Timestamp(6)
+  anulado_at                                                 DateTime?   @db.Timestamptz(6)
   anulado_by_user                                            BigInt?
   motivo_anulacion                                           String?
-  tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea00")
-  asambleas                                                  asambleas   @relation(fields: [id_tenant, id_asamblea], references: [id_tenant, id_asamblea], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea01")
-  personas                                                   personas    @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea02")
   auth_users_asistencia_asamblea_anulado_by_userToauth_users auth_users? @relation("asistencia_asamblea_anulado_by_userToauth_users", fields: [anulado_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea_anulado_by")
+  asambleas                                                  asambleas   @relation(fields: [id_tenant, id_asamblea], references: [id_tenant, id_asamblea], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea01")
   auth_users_asistencia_asamblea_created_by_userToauth_users auth_users  @relation("asistencia_asamblea_created_by_userToauth_users", fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea_created_by")
+  personas                                                   personas    @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea02")
+  tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea00")
   auth_users_asistencia_asamblea_updated_by_userToauth_users auth_users? @relation("asistencia_asamblea_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea_updated_by")
 
-  @@id([id_tenant, id_asistencia], map: "pk_asistencia_asamblea00")
-  @@unique([id_tenant, id_asamblea, id_persona], map: "ux_asistencia_asamblea00")
-  @@index([id_tenant], map: "inx_asistencia_asamblea00")
-  @@index([id_tenant, id_asamblea], map: "inx_asistencia_asamblea01")
-  @@index([id_tenant, id_persona], map: "inx_asistencia_asamblea02")
-  @@index([id_tenant, estado], map: "inx_asistencia_asamblea03")
-  @@index([id_tenant, anulado], map: "inx_asistencia_asamblea04")
-  @@index([id_tenant, created_at], map: "inx_asistencia_asamblea05")
+  @@id([id_tenant, id_asistencia], map: "pk_asistencia_asamblea")
+  @@unique([id_tenant, id_asamblea, id_persona], map: "ux_asistencia_asamblea")
+  @@index([id_tenant, id_asamblea], map: "inx_asistencia_asamblea_asamblea")
+  @@index([id_tenant, estado], map: "inx_asistencia_asamblea_estado")
+  @@index([id_tenant, id_persona], map: "inx_asistencia_asamblea_persona")
 }
 
 model auth_login_logs {
   id_log         BigInt      @id @default(autoincrement())
   id_user        BigInt?
-  email          String      @db.VarChar(120)
-  login_at       DateTime    @default(now()) @db.Timestamp(6)
+  email          String      @db.Citext
+  login_at       DateTime    @default(now()) @db.Timestamptz(6)
   success        Boolean
   ip_address     String?     @db.VarChar(45)
   user_agent     String?
@@ -81,35 +90,45 @@ model auth_login_logs {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model auth_users {
-  id_user                                                             BigInt                @id(map: "pk_auth_users") @default(autoincrement())
-  email                                                               String                @unique(map: "ux_auth_users_email") @db.VarChar(120)
-  nombres                                                             String                @db.VarChar(100)
-  apellidos                                                           String                @db.VarChar(100)
-  password_hash                                                       String                @db.VarChar(255)
-  estado                                                              String                @default("ACTIVO") @db.VarChar(10)
-  email_verified                                                      Boolean               @default(false)
-  last_login_at                                                       DateTime?             @db.Timestamp(6)
-  email_verified_at                                                   DateTime?             @db.Timestamp(6)
-  created_at                                                          DateTime              @default(now()) @db.Timestamp(6)
-  updated_at                                                          DateTime              @default(now()) @db.Timestamp(6)
-  asistencia_asamblea_asistencia_asamblea_anulado_by_userToauth_users asistencia_asamblea[] @relation("asistencia_asamblea_anulado_by_userToauth_users")
-  asistencia_asamblea_asistencia_asamblea_created_by_userToauth_users asistencia_asamblea[] @relation("asistencia_asamblea_created_by_userToauth_users")
-  asistencia_asamblea_asistencia_asamblea_updated_by_userToauth_users asistencia_asamblea[] @relation("asistencia_asamblea_updated_by_userToauth_users")
-  auth_login_logs                                                     auth_login_logs[]
-  auth_user_tokens                                                    auth_user_tokens[]
-  caja_movimientos_caja_movimientos_anulado_by_userToauth_users       caja_movimientos[]    @relation("caja_movimientos_anulado_by_userToauth_users")
-  caja_movimientos_caja_movimientos_created_by_userToauth_users       caja_movimientos[]    @relation("caja_movimientos_created_by_userToauth_users")
-  caja_movimientos_caja_movimientos_updated_by_userToauth_users       caja_movimientos[]    @relation("caja_movimientos_updated_by_userToauth_users")
-  caja_movimientos                                                    caja_movimientos[]
-  faena_participacion_faena_participacion_anulado_by_userToauth_users faena_participacion[] @relation("faena_participacion_anulado_by_userToauth_users")
-  faena_participacion_faena_participacion_created_by_userToauth_users faena_participacion[] @relation("faena_participacion_created_by_userToauth_users")
-  faena_participacion_faena_participacion_updated_by_userToauth_users faena_participacion[] @relation("faena_participacion_updated_by_userToauth_users")
-  tenant_invitations                                                  tenant_invitations[]
-  tenant_users_tenant_users_invited_byToauth_users                    tenant_users[]        @relation("tenant_users_invited_byToauth_users")
-  tenant_users_tenant_users_id_userToauth_users                       tenant_users[]        @relation("tenant_users_id_userToauth_users")
-  tenants                                                             tenants[]
+  id_user                                                               BigInt                   @id(map: "pk_auth_users") @default(autoincrement())
+  email                                                                 String                   @unique(map: "ux_auth_users_email") @db.Citext
+  nombres                                                               String                   @db.VarChar(100)
+  apellidos                                                             String                   @db.VarChar(100)
+  password_hash                                                         String                   @db.VarChar(255)
+  estado                                                                String                   @default("ACTIVO") @db.VarChar(15)
+  email_verified                                                        Boolean                  @default(false)
+  email_verified_at                                                     DateTime?                @db.Timestamptz(6)
+  last_login_at                                                         DateTime?                @db.Timestamptz(6)
+  created_at                                                            DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at                                                            DateTime                 @default(now()) @db.Timestamptz(6)
+  asambleas                                                             asambleas[]
+  asistencia_asamblea_asistencia_asamblea_anulado_by_userToauth_users   asistencia_asamblea[]    @relation("asistencia_asamblea_anulado_by_userToauth_users")
+  asistencia_asamblea_asistencia_asamblea_created_by_userToauth_users   asistencia_asamblea[]    @relation("asistencia_asamblea_created_by_userToauth_users")
+  asistencia_asamblea_asistencia_asamblea_updated_by_userToauth_users   asistencia_asamblea[]    @relation("asistencia_asamblea_updated_by_userToauth_users")
+  audit_log                                                             audit_log[]
+  auth_login_logs                                                       auth_login_logs[]
+  auth_user_tokens                                                      auth_user_tokens[]
+  caja_movimientos_caja_movimientos_anulado_by_userToauth_users         caja_movimientos[]       @relation("caja_movimientos_anulado_by_userToauth_users")
+  caja_movimientos_caja_movimientos_created_by_userToauth_users         caja_movimientos[]       @relation("caja_movimientos_created_by_userToauth_users")
+  caja_movimientos_caja_movimientos_updated_by_userToauth_users         caja_movimientos[]       @relation("caja_movimientos_updated_by_userToauth_users")
+  caja_movimientos                                                      caja_movimientos[]
+  credito_movimientos                                                   credito_movimientos[]
+  creditos_persona                                                      creditos_persona[]
+  documentos                                                            documentos[]
+  faena_participacion_faena_participacion_anulado_by_userToauth_users   faena_participacion[]    @relation("faena_participacion_anulado_by_userToauth_users")
+  faena_participacion_faena_participacion_created_by_userToauth_users   faena_participacion[]    @relation("faena_participacion_created_by_userToauth_users")
+  faena_participacion_faena_participacion_updated_by_userToauth_users   faena_participacion[]    @relation("faena_participacion_updated_by_userToauth_users")
+  obligacion_movimientos                                                obligacion_movimientos[]
+  obligacion_pagos                                                      obligacion_pagos[]
+  obligaciones_persona_obligaciones_persona_anulada_by_userToauth_users obligaciones_persona[]   @relation("obligaciones_persona_anulada_by_userToauth_users")
+  obligaciones_persona_obligaciones_persona_created_by_userToauth_users obligaciones_persona[]   @relation("obligaciones_persona_created_by_userToauth_users")
+  obligaciones_persona_obligaciones_persona_updated_by_userToauth_users obligaciones_persona[]   @relation("obligaciones_persona_updated_by_userToauth_users")
+  persona_condiciones                                                   persona_condiciones[]
+  tenant_invitations                                                    tenant_invitations[]
+  tenant_users_tenant_users_invited_byToauth_users                      tenant_users[]           @relation("tenant_users_invited_byToauth_users")
+  tenant_users_tenant_users_id_userToauth_users                         tenant_users[]           @relation("tenant_users_id_userToauth_users")
 
-  @@index([estado], map: "inx_auth_users00")
+  @@index([estado], map: "inx_auth_users_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -126,59 +145,58 @@ model bienes {
   fecha_baja       DateTime?          @db.Date
   estado           String             @default("BUENO") @db.VarChar(20)
   observaciones    String?
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
   tenants          tenants            @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_bienes00")
   caja_movimientos caja_movimientos[]
 
-  @@id([id_tenant, id_bien], map: "pk_bienes00")
-  @@index([id_tenant], map: "inx_bienes00")
-  @@index([id_tenant, estado], map: "inx_bienes01")
-  @@index([id_tenant, tipo], map: "inx_bienes02")
+  @@id([id_tenant, id_bien], map: "pk_bienes")
+  @@index([id_tenant, estado], map: "inx_bienes_estado")
+  @@index([id_tenant, tipo], map: "inx_bienes_tipo")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model caja_movimientos {
   id_tenant                                               BigInt
-  id_movimiento                                           BigInt      @default(autoincrement())
-  fecha                                                   DateTime    @db.Date
-  tipo                                                    String      @db.VarChar(10)
-  monto                                                   Decimal     @db.Decimal(10, 2)
-  categoria                                               String      @db.VarChar(40)
+  id_movimiento                                           BigInt             @default(autoincrement())
+  fecha                                                   DateTime           @db.Date
+  tipo                                                    String             @db.VarChar(10)
+  monto                                                   Decimal            @db.Decimal(10, 2)
+  id_categoria_caja                                       BigInt
   id_persona                                              BigInt?
   id_faena                                                BigInt?
   id_asamblea                                             BigInt?
   id_bien                                                 BigInt?
   id_user                                                 BigInt
-  descripcion                                             String?     @db.VarChar(255)
-  medio_pago                                              String      @db.VarChar(20)
-  doc_referencia                                          String?     @db.VarChar(100)
+  descripcion                                             String?            @db.VarChar(255)
+  medio_pago                                              String             @db.VarChar(20)
+  doc_referencia                                          String?            @db.VarChar(100)
   observaciones                                           String?
-  created_at                                              DateTime    @default(now()) @db.Timestamp(6)
+  created_at                                              DateTime           @default(now()) @db.Timestamptz(6)
   created_by_user                                         BigInt
-  updated_at                                              DateTime?   @db.Timestamp(6)
+  updated_at                                              DateTime?          @db.Timestamptz(6)
   updated_by_user                                         BigInt?
-  anulado                                                 Boolean     @default(false)
-  anulado_at                                              DateTime?   @db.Timestamp(6)
+  anulado                                                 Boolean            @default(false)
+  anulado_at                                              DateTime?          @db.Timestamptz(6)
   anulado_by_user                                         BigInt?
   motivo_anulacion                                        String?
-  tenants                                                 tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos00")
-  personas                                                personas?   @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos01")
-  faenas                                                  faenas?     @relation(fields: [id_tenant, id_faena], references: [id_tenant, id_faena], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos02")
-  asambleas                                               asambleas?  @relation(fields: [id_tenant, id_asamblea], references: [id_tenant, id_asamblea], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos03")
-  bienes                                                  bienes?     @relation(fields: [id_tenant, id_bien], references: [id_tenant, id_bien], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos04")
-  auth_users_caja_movimientos_anulado_by_userToauth_users auth_users? @relation("caja_movimientos_anulado_by_userToauth_users", fields: [anulado_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_anulado_by")
-  auth_users_caja_movimientos_created_by_userToauth_users auth_users  @relation("caja_movimientos_created_by_userToauth_users", fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_created_by")
-  auth_users_caja_movimientos_updated_by_userToauth_users auth_users? @relation("caja_movimientos_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_updated_by")
-  auth_users                                              auth_users  @relation(fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_user")
+  auth_users_caja_movimientos_anulado_by_userToauth_users auth_users?        @relation("caja_movimientos_anulado_by_userToauth_users", fields: [anulado_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_anulado_by")
+  asambleas                                               asambleas?         @relation(fields: [id_tenant, id_asamblea], references: [id_tenant, id_asamblea], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos03")
+  bienes                                                  bienes?            @relation(fields: [id_tenant, id_bien], references: [id_tenant, id_bien], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos04")
+  caja_categorias                                         caja_categorias    @relation(fields: [id_tenant, id_categoria_caja], references: [id_tenant, id_categoria_caja], onDelete: NoAction, onUpdate: NoAction, map: "fk_cm_categoria")
+  auth_users_caja_movimientos_created_by_userToauth_users auth_users         @relation("caja_movimientos_created_by_userToauth_users", fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_created_by")
+  faenas                                                  faenas?            @relation(fields: [id_tenant, id_faena], references: [id_tenant, id_faena], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos02")
+  personas                                                personas?          @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos01")
+  tenants                                                 tenants            @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos00")
+  auth_users_caja_movimientos_updated_by_userToauth_users auth_users?        @relation("caja_movimientos_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_updated_by")
+  auth_users                                              auth_users         @relation(fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_user")
+  obligacion_pagos                                        obligacion_pagos[]
 
-  @@id([id_tenant, id_movimiento], map: "pk_caja_movimientos00")
-  @@index([id_tenant], map: "inx_caja_movimientos00")
-  @@index([id_tenant, fecha, tipo], map: "inx_caja_movimientos01")
-  @@index([id_tenant, categoria], map: "inx_caja_movimientos02")
-  @@index([id_tenant, id_persona], map: "inx_caja_movimientos03")
-  @@index([id_tenant, id_user], map: "inx_caja_movimientos04")
-  @@index([id_tenant, created_at], map: "inx_caja_movimientos05")
-  @@index([id_tenant, anulado], map: "inx_caja_movimientos06")
+  @@id([id_tenant, id_movimiento], map: "pk_caja_movimientos")
+  @@index([id_tenant, fecha, tipo], map: "inx_cm_fecha_tipo")
+  @@index([id_tenant, id_persona], map: "inx_cm_persona")
+  @@index([id_tenant, id_user], map: "inx_cm_user")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -194,46 +212,51 @@ model faena_participacion {
   multa_generada                                             Boolean     @default(false)
   monto_multa                                                Decimal?    @db.Decimal(10, 2)
   observaciones                                              String?
-  created_at                                                 DateTime    @default(now()) @db.Timestamp(6)
+  created_at                                                 DateTime    @default(now()) @db.Timestamptz(6)
   created_by_user                                            BigInt
-  updated_at                                                 DateTime?   @db.Timestamp(6)
+  updated_at                                                 DateTime?   @db.Timestamptz(6)
   updated_by_user                                            BigInt?
   anulado                                                    Boolean     @default(false)
-  anulado_at                                                 DateTime?   @db.Timestamp(6)
+  anulado_at                                                 DateTime?   @db.Timestamptz(6)
   anulado_by_user                                            BigInt?
   motivo_anulacion                                           String?
-  tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion00")
-  faenas                                                     faenas      @relation(fields: [id_tenant, id_faena], references: [id_tenant, id_faena], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion01")
-  personas                                                   personas    @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion02")
   auth_users_faena_participacion_anulado_by_userToauth_users auth_users? @relation("faena_participacion_anulado_by_userToauth_users", fields: [anulado_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion_anulado_by")
   auth_users_faena_participacion_created_by_userToauth_users auth_users  @relation("faena_participacion_created_by_userToauth_users", fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion_created_by")
+  faenas                                                     faenas      @relation(fields: [id_tenant, id_faena], references: [id_tenant, id_faena], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion01")
+  personas                                                   personas    @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion02")
+  tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion00")
   auth_users_faena_participacion_updated_by_userToauth_users auth_users? @relation("faena_participacion_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion_updated_by")
 
-  @@id([id_tenant, id_faena_participacion], map: "pk_faena_participacion00")
-  @@unique([id_tenant, id_faena, id_persona], map: "ux_faena_participacion00")
-  @@index([id_tenant], map: "inx_faena_participacion00")
-  @@index([id_tenant, id_faena], map: "inx_faena_participacion01")
-  @@index([id_tenant, id_persona], map: "inx_faena_participacion02")
-  @@index([id_tenant, estado], map: "inx_faena_participacion03")
-  @@index([id_tenant, anulado], map: "inx_faena_participacion04")
-  @@index([id_tenant, created_at], map: "inx_faena_participacion05")
+  @@id([id_tenant, id_faena_participacion], map: "pk_faena_participacion")
+  @@unique([id_tenant, id_faena, id_persona], map: "ux_faena_participacion")
+  @@index([id_tenant, estado], map: "inx_fp_estado")
+  @@index([id_tenant, id_faena], map: "inx_fp_faena")
+  @@index([id_tenant, id_persona], map: "inx_fp_persona")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model faenas {
-  id_tenant           BigInt
-  id_faena            BigInt                @default(autoincrement())
-  fecha               DateTime              @db.Date
-  descripcion         String                @db.VarChar(200)
-  lugar               String?               @db.VarChar(200)
-  observaciones       String?
-  caja_movimientos    caja_movimientos[]
-  faena_participacion faena_participacion[]
-  tenants             tenants               @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_faenas00")
+  id_tenant            BigInt
+  id_faena             BigInt                 @default(autoincrement())
+  fecha_programada     DateTime               @db.Date
+  hora_inicio          DateTime?              @db.Time(6)
+  hora_fin             DateTime?              @db.Time(6)
+  descripcion          String                 @db.VarChar(200)
+  lugar                String?                @db.VarChar(200)
+  tipo_faena           String                 @default("ORDINARIA") @db.VarChar(20)
+  es_obligatoria       Boolean                @default(true)
+  estado               String                 @default("PROGRAMADA") @db.VarChar(15)
+  monto_multa_base     Decimal?               @db.Decimal(10, 2)
+  observaciones        String?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  caja_movimientos     caja_movimientos[]
+  faena_participacion  faena_participacion[]
+  tenants              tenants                @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_faenas00")
+  obligaciones_persona obligaciones_persona[]
 
-  @@id([id_tenant, id_faena], map: "pk_faenas00")
-  @@index([id_tenant], map: "inx_faenas00")
-  @@index([id_tenant, fecha], map: "inx_faenas01")
+  @@id([id_tenant, id_faena], map: "pk_faenas")
+  @@index([id_tenant, fecha_programada], map: "inx_faenas_fecha")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -246,34 +269,37 @@ model junta_miembros {
   cargo             String            @db.VarChar(20)
   fecha_inicio      DateTime          @db.Date
   fecha_fin         DateTime?         @db.Date
-  tenants           tenants           @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_junta_miembros00")
+  observaciones     String?
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime          @default(now()) @db.Timestamptz(6)
   juntas_directivas juntas_directivas @relation(fields: [id_tenant, id_junta], references: [id_tenant, id_junta], onDelete: NoAction, onUpdate: NoAction, map: "fk_junta_miembros01")
   personas          personas          @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_junta_miembros02")
 
-  @@id([id_tenant, id_junta_miembro], map: "pk_junta_miembros00")
-  @@index([id_tenant], map: "inx_junta_miembros00")
-  @@index([id_tenant, id_junta], map: "inx_junta_miembros01")
-  @@index([id_tenant, id_persona], map: "inx_junta_miembros02")
-  @@index([id_tenant, cargo], map: "inx_junta_miembros03")
+  @@id([id_tenant, id_junta_miembro], map: "pk_junta_miembros")
+  @@unique([id_tenant, id_junta, cargo], map: "ux_junta_presidente_activo", where: raw("(((cargo)::text = 'PRESIDENTE'::text) AND (fecha_fin IS NULL))"))
+  @@index([id_tenant, id_junta], map: "inx_junta_miembros_junta")
+  @@index([id_tenant, id_persona], map: "inx_junta_miembros_persona")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model juntas_directivas {
-  id_tenant      BigInt
-  id_junta       BigInt           @default(autoincrement())
-  nombre         String           @db.VarChar(100)
-  fecha_inicio   DateTime         @db.Date
-  fecha_fin      DateTime?        @db.Date
-  estado         String           @default("VIGENTE") @db.VarChar(10)
-  observaciones  String?
-  junta_miembros junta_miembros[]
-  tenants        tenants          @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_juntas_directivas00")
+  id_tenant          BigInt           @unique(map: "ux_junta_vigente", where: raw("((estado)::text = 'VIGENTE'::text)"))
+  id_junta           BigInt           @default(autoincrement())
+  nombre             String           @db.VarChar(100)
+  fecha_eleccion     DateTime?        @db.Date
+  fecha_inicio       DateTime         @db.Date
+  fecha_fin          DateTime?        @db.Date
+  estado             String           @default("VIGENTE") @db.VarChar(15)
+  documento_sustento String?          @db.VarChar(100)
+  observaciones      String?
+  created_at         DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime         @default(now()) @db.Timestamptz(6)
+  junta_miembros     junta_miembros[]
+  tenants            tenants          @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_juntas_directivas00")
 
-  @@id([id_tenant, id_junta], map: "pk_juntas_directivas00")
-  @@index([id_tenant], map: "inx_juntas_directivas00")
-  @@index([id_tenant, estado], map: "inx_juntas_directivas01")
-  @@index([id_tenant, fecha_inicio, fecha_fin], map: "inx_juntas_directivas02")
+  @@id([id_tenant, id_junta], map: "pk_juntas_directivas")
+  @@index([id_tenant, estado], map: "inx_juntas_directivas_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -285,62 +311,70 @@ model persona_terreno {
   id_terreno               BigInt
   tipo_relacion            String   @db.VarChar(15)
   porcentaje_participacion Decimal? @db.Decimal(5, 2)
-  tenants                  tenants  @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_terreno00")
   personas                 personas @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_terreno01")
+  tenants                  tenants  @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_terreno00")
   terrenos                 terrenos @relation(fields: [id_tenant, id_terreno], references: [id_tenant, id_terreno], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_terreno02")
 
-  @@id([id_tenant, id_persona_terreno], map: "pk_persona_terreno00")
-  @@unique([id_tenant, id_persona, id_terreno], map: "ux_persona_terreno00")
-  @@index([id_tenant], map: "inx_persona_terreno00")
-  @@index([id_tenant, id_terreno], map: "inx_persona_terreno01")
-  @@index([id_tenant, tipo_relacion], map: "inx_persona_terreno02")
+  @@id([id_tenant, id_persona_terreno], map: "pk_persona_terreno")
+  @@unique([id_tenant, id_persona, id_terreno], map: "ux_persona_terreno")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model personas {
-  id_tenant           BigInt
-  id_persona          BigInt                @default(autoincrement())
-  nombres             String                @db.VarChar(100)
-  apellidopaterno     String                @db.VarChar(100)
-  apellidomaterno     String                @db.VarChar(100)
-  dni                 String?               @db.VarChar(15)
-  telefono            String?               @db.VarChar(20)
-  referencia_vivienda String?               @db.VarChar(200)
-  tipo_participante   String                @default("NO_PADRONADO") @db.VarChar(20)
-  estado              String                @default("ACTIVO") @db.VarChar(20)
-  fecha_registro      DateTime              @db.Date
-  observaciones       String?
-  asistencia_asamblea asistencia_asamblea[]
-  caja_movimientos    caja_movimientos[]
-  faena_participacion faena_participacion[]
-  junta_miembros      junta_miembros[]
-  persona_terreno     persona_terreno[]
-  tenants             tenants               @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_personas00")
+  id_tenant            BigInt
+  id_persona           BigInt                 @default(autoincrement())
+  nombres              String                 @db.VarChar(100)
+  apellido_paterno     String                 @db.VarChar(100)
+  apellido_materno     String                 @db.VarChar(100)
+  dni                  String?                @db.VarChar(15)
+  email                String?                @db.Citext
+  telefono             String?                @db.VarChar(20)
+  direccion            String?                @db.VarChar(200)
+  referencia_vivienda  String?                @db.VarChar(200)
+  tipo_participante    String                 @default("NO_PADRONADO") @db.VarChar(20)
+  estado               String                 @default("ACTIVO") @db.VarChar(20)
+  fecha_registro       DateTime               @default(dbgenerated("CURRENT_DATE")) @db.Date
+  fecha_baja           DateTime?              @db.Date
+  observaciones        String?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  asistencia_asamblea  asistencia_asamblea[]
+  caja_movimientos     caja_movimientos[]
+  creditos_persona     creditos_persona[]
+  faena_participacion  faena_participacion[]
+  junta_miembros       junta_miembros[]
+  obligaciones_persona obligaciones_persona[]
+  persona_condiciones  persona_condiciones[]
+  persona_terreno      persona_terreno[]
+  tenants              tenants                @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_personas00")
 
-  @@id([id_tenant, id_persona], map: "pk_personas00")
-  @@index([id_tenant], map: "inx_personas00")
-  @@index([id_tenant, dni], map: "inx_personas01")
-  @@index([id_tenant, apellidopaterno, apellidomaterno, nombres], map: "inx_personas02")
+  @@id([id_tenant, id_persona], map: "pk_personas")
+  @@unique([id_tenant, dni], map: "ux_personas_dni", where: raw("(dni IS NOT NULL)"))
+  @@index([id_tenant, apellido_paterno, apellido_materno, nombres], map: "inx_personas_nombre")
+  @@index([id_tenant], map: "inx_personas_tenant")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model tenant_invitations {
   id_invitation BigInt     @id(map: "pk_tenant_invitations") @default(autoincrement())
   id_tenant     BigInt
-  email         String     @db.VarChar(120)
+  email         String     @db.Citext
   role          String     @default("MEMBER") @db.VarChar(15)
-  token         String     @unique(map: "ux_inv_token") @db.VarChar(120)
+  token_hash    String     @unique(map: "ux_inv_token_hash") @db.VarChar(255)
   status        String     @default("PENDING") @db.VarChar(15)
-  expires_at    DateTime   @db.Timestamp(6)
+  expires_at    DateTime   @db.Timestamptz(6)
+  accepted_at   DateTime?  @db.Timestamptz(6)
+  revoked_at    DateTime?  @db.Timestamptz(6)
   invited_by    BigInt
-  created_at    DateTime   @default(now()) @db.Timestamp(6)
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
   tenants       tenants    @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_inv_tenant")
   auth_users    auth_users @relation(fields: [invited_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_inv_user")
 
-  @@index([id_tenant], map: "inx_inv00")
-  @@index([email], map: "inx_inv01")
-  @@index([status], map: "inx_inv02")
+  @@unique([id_tenant, email], map: "ux_inv_pending_per_email", where: raw("((status)::text = 'PENDING'::text)"))
+  @@index([email], map: "inx_inv_email")
+  @@index([status], map: "inx_inv_status")
+  @@index([id_tenant], map: "inx_inv_tenant")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -349,8 +383,10 @@ model tenant_users {
   id_tenant                                      BigInt      @unique(map: "ux_one_owner_per_tenant", where: raw("(((role)::text = 'OWNER'::text) AND ((estado)::text = 'ACTIVO'::text))"))
   id_user                                        BigInt
   role                                           String      @default("MEMBER") @db.VarChar(15)
-  estado                                         String      @default("ACTIVO") @db.VarChar(10)
-  joined_at                                      DateTime    @default(now()) @db.Timestamp(6)
+  estado                                         String      @default("PENDIENTE") @db.VarChar(15)
+  joined_at                                      DateTime    @default(now()) @db.Timestamptz(6)
+  accepted_at                                    DateTime?   @db.Timestamptz(6)
+  ended_at                                       DateTime?   @db.Timestamptz(6)
   invited_by                                     BigInt?
   id_persona                                     BigInt?
   auth_users_tenant_users_invited_byToauth_users auth_users? @relation("tenant_users_invited_byToauth_users", fields: [invited_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_invited")
@@ -358,71 +394,284 @@ model tenant_users {
   auth_users_tenant_users_id_userToauth_users    auth_users  @relation("tenant_users_id_userToauth_users", fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_user")
 
   @@id([id_tenant, id_user], map: "pk_tenant_users")
-  @@index([id_user], map: "inx_tenant_users00")
-  @@index([id_tenant, role, estado], map: "inx_tenant_users01")
+  @@unique([id_tenant, id_persona], map: "ux_tenant_users_persona", where: raw("(id_persona IS NOT NULL)"))
+  @@index([id_tenant, role, estado], map: "inx_tenant_users_tenant_role_estado")
+  @@index([id_user], map: "inx_tenant_users_user")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model tenants {
-  id_tenant           BigInt                @id(map: "pk_tenants00") @default(autoincrement())
-  nombre              String                @unique(map: "ux_tenants00") @db.VarChar(150)
-  ruc                 String?               @db.VarChar(15)
-  dni                 String?               @db.VarChar(8)
-  estado              String                @default("ACTIVO") @db.VarChar(10)
-  created_at          DateTime              @default(now()) @db.Timestamp(6)
+  id_tenant           BigInt                @id(map: "pk_tenants") @default(autoincrement())
+  nombre              String                @unique(map: "ux_tenants_nombre") @db.VarChar(150)
+  tipo_documento      String?               @db.VarChar(15)
+  numero_documento    String?               @db.VarChar(20)
+  estado              String                @default("ACTIVO") @db.VarChar(15)
   observaciones       String?               @db.VarChar(300)
-  owner_user_id       BigInt?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
   asambleas           asambleas[]
   asistencia_asamblea asistencia_asamblea[]
   bienes              bienes[]
+  caja_categorias     caja_categorias[]
   caja_movimientos    caja_movimientos[]
+  conceptos_cobro     conceptos_cobro[]
+  documentos          documentos[]
   faena_participacion faena_participacion[]
   faenas              faenas[]
-  junta_miembros      junta_miembros[]
-  juntas_directivas   juntas_directivas[]
+  juntas_directivas   juntas_directivas?
   persona_terreno     persona_terreno[]
   personas            personas[]
   tenant_invitations  tenant_invitations[]
   tenant_users        tenant_users?
-  auth_users          auth_users?           @relation(fields: [owner_user_id], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tenants_owner")
   terrenos            terrenos[]
 
-  @@index([estado], map: "inx_tenants00")
-  @@index([owner_user_id], map: "inx_tenants01")
+  @@index([estado], map: "inx_tenants_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model terrenos {
-  id_tenant       BigInt
-  id_terreno      BigInt            @default(autoincrement())
-  descripcion     String            @db.VarChar(200)
-  area_aprox_m2   Decimal?          @db.Decimal(10, 2)
-  estado          String            @default("EN_USO") @db.VarChar(20)
-  observaciones   String?
-  persona_terreno persona_terreno[]
-  tenants         tenants           @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_terrenos00")
+  id_tenant         BigInt
+  id_terreno        BigInt            @default(autoincrement())
+  codigo_lote       String?           @db.VarChar(30)
+  manzana           String?           @db.VarChar(20)
+  numero_lote       String?           @db.VarChar(20)
+  descripcion       String            @db.VarChar(200)
+  area_aprox_m2     Decimal?          @db.Decimal(10, 2)
+  area_legal_m2     Decimal?          @db.Decimal(10, 2)
+  partida_registral String?           @db.VarChar(50)
+  ubicacion         String?           @db.VarChar(200)
+  estado            String            @default("EN_USO") @db.VarChar(20)
+  observaciones     String?
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime          @default(now()) @db.Timestamptz(6)
+  persona_terreno   persona_terreno[]
+  tenants           tenants           @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_terrenos00")
 
-  @@id([id_tenant, id_terreno], map: "pk_terrenos00")
-  @@index([id_tenant], map: "inx_terrenos00")
-  @@index([id_tenant, estado], map: "inx_terrenos01")
+  @@id([id_tenant, id_terreno], map: "pk_terrenos")
+  @@index([id_tenant, estado], map: "inx_terrenos_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model auth_user_tokens {
   id_token   BigInt     @id(map: "pk_auth_user_tokens") @default(autoincrement())
   id_user    BigInt
-  token_hash String     @db.VarChar(255)
+  token_hash String     @unique(map: "ux_auth_user_tokens_hash") @db.VarChar(255)
   token_type String     @db.VarChar(30)
-  expires_at DateTime   @db.Timestamp(6)
-  used_at    DateTime?  @db.Timestamp(6)
-  created_at DateTime   @default(now()) @db.Timestamp(6)
+  expires_at DateTime   @db.Timestamptz(6)
+  used_at    DateTime?  @db.Timestamptz(6)
+  revoked_at DateTime?  @db.Timestamptz(6)
+  created_at DateTime   @default(now()) @db.Timestamptz(6)
   created_ip String?    @db.VarChar(45)
   user_agent String?
   auth_users auth_users @relation(fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_auth_user_tokens_user")
 
   @@index([expires_at], map: "inx_auth_user_tokens_expires")
-  @@index([token_type], map: "inx_auth_user_tokens_type")
   @@index([id_user], map: "inx_auth_user_tokens_user")
+  @@index([id_user, token_type], map: "inx_auth_user_tokens_user_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model audit_log {
+  id_audit        BigInt      @id @default(autoincrement())
+  id_tenant       BigInt?
+  table_name      String      @db.VarChar(100)
+  record_pk       String      @db.VarChar(200)
+  action          String      @db.VarChar(10)
+  old_data        Json?
+  new_data        Json?
+  changed_at      DateTime    @default(now()) @db.Timestamptz(6)
+  changed_by_user BigInt?
+  ip_address      String?     @db.VarChar(45)
+  auth_users      auth_users? @relation(fields: [changed_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_audit_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model caja_categorias {
+  id_tenant         BigInt
+  id_categoria_caja BigInt             @default(autoincrement())
+  nombre            String             @db.VarChar(100)
+  tipo              String             @db.VarChar(10)
+  activo            Boolean            @default(true)
+  tenants           tenants            @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_ccat_tenant")
+  caja_movimientos  caja_movimientos[]
+
+  @@id([id_tenant, id_categoria_caja], map: "pk_caja_categorias")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model conceptos_cobro {
+  id_tenant            BigInt
+  id_concepto_cobro    BigInt                 @default(autoincrement())
+  nombre               String                 @db.VarChar(100)
+  tipo                 String                 @db.VarChar(25)
+  activo               Boolean                @default(true)
+  requiere_periodo     Boolean                @default(false)
+  observaciones        String?
+  tenants              tenants                @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_conceptos_tenant")
+  obligaciones_persona obligaciones_persona[]
+
+  @@id([id_tenant, id_concepto_cobro], map: "pk_conceptos_cobro")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model credito_movimientos {
+  id_tenant             BigInt
+  id_credito_movimiento BigInt           @default(autoincrement())
+  id_credito            BigInt
+  tipo_movimiento       String           @db.VarChar(20)
+  cantidad              Decimal          @db.Decimal(10, 2)
+  fecha_movimiento      DateTime         @default(now()) @db.Timestamptz(6)
+  referencia_tipo       String?          @db.VarChar(30)
+  referencia_id         BigInt?
+  observaciones         String?
+  created_by_user       BigInt
+  auth_users            auth_users       @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_created_by")
+  creditos_persona      creditos_persona @relation(fields: [id_tenant, id_credito], references: [id_tenant, id_credito], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_credito")
+
+  @@id([id_tenant, id_credito_movimiento], map: "pk_credito_movimientos")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model creditos_persona {
+  id_tenant           BigInt
+  id_credito          BigInt                @default(autoincrement())
+  id_persona          BigInt
+  tipo_credito        String                @db.VarChar(20)
+  cantidad_original   Decimal               @db.Decimal(10, 2)
+  cantidad_disponible Decimal               @db.Decimal(10, 2)
+  equivalencia_monto  Decimal?              @db.Decimal(10, 2)
+  referencia_tipo     String?               @db.VarChar(30)
+  referencia_id       BigInt?
+  fecha_generacion    DateTime              @default(now()) @db.Timestamptz(6)
+  fecha_vencimiento   DateTime?             @db.Timestamptz(6)
+  estado              String                @default("DISPONIBLE") @db.VarChar(20)
+  observaciones       String?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  created_by_user     BigInt
+  credito_movimientos credito_movimientos[]
+  auth_users          auth_users            @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_cp_created_by")
+  personas            personas              @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_cp_persona")
+
+  @@id([id_tenant, id_credito], map: "pk_creditos_persona")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model documentos {
+  id_tenant        BigInt
+  id_documento     BigInt     @default(autoincrement())
+  modulo           String     @db.VarChar(30)
+  entidad_id       BigInt
+  nombre_archivo   String     @db.VarChar(255)
+  nombre_original  String     @db.VarChar(255)
+  mime_type        String     @db.VarChar(100)
+  tamano_bytes     BigInt
+  storage_path     String     @db.VarChar(500)
+  uploaded_at      DateTime   @default(now()) @db.Timestamptz(6)
+  uploaded_by_user BigInt
+  observaciones    String?
+  tenants          tenants    @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_documentos_tenant")
+  auth_users       auth_users @relation(fields: [uploaded_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_documentos_user")
+
+  @@id([id_tenant, id_documento], map: "pk_documentos")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model obligacion_movimientos {
+  id_tenant                BigInt
+  id_obligacion_movimiento BigInt               @default(autoincrement())
+  id_obligacion            BigInt
+  tipo_movimiento          String               @db.VarChar(20)
+  monto                    Decimal              @db.Decimal(10, 2)
+  fecha_movimiento         DateTime             @default(now()) @db.Timestamptz(6)
+  referencia_tipo          String?              @db.VarChar(30)
+  referencia_id            BigInt?
+  observaciones            String?
+  created_by_user          BigInt
+  auth_users               auth_users           @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_created_by")
+  obligaciones_persona     obligaciones_persona @relation(fields: [id_tenant, id_obligacion], references: [id_tenant, id_obligacion], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_obligacion")
+
+  @@id([id_tenant, id_obligacion_movimiento], map: "pk_obligacion_movimientos")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model obligacion_pagos {
+  id_tenant            BigInt
+  id_obligacion_pago   BigInt               @default(autoincrement())
+  id_obligacion        BigInt
+  id_movimiento        BigInt
+  monto_aplicado       Decimal              @db.Decimal(10, 2)
+  created_at           DateTime             @default(now()) @db.Timestamptz(6)
+  created_by_user      BigInt
+  auth_users           auth_users           @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_created_by")
+  caja_movimientos     caja_movimientos     @relation(fields: [id_tenant, id_movimiento], references: [id_tenant, id_movimiento], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_movimiento")
+  obligaciones_persona obligaciones_persona @relation(fields: [id_tenant, id_obligacion], references: [id_tenant, id_obligacion], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_obligacion")
+
+  @@id([id_tenant, id_obligacion_pago], map: "pk_obligacion_pagos")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model obligaciones_persona {
+  id_tenant                                                   BigInt
+  id_obligacion                                               BigInt                   @default(autoincrement())
+  id_persona                                                  BigInt
+  id_concepto_cobro                                           BigInt
+  periodo                                                     String?                  @db.VarChar(20)
+  fecha_emision                                               DateTime                 @db.Date
+  fecha_vencimiento                                           DateTime?                @db.Date
+  monto_original                                              Decimal                  @db.Decimal(10, 2)
+  monto_pagado                                                Decimal                  @default(0) @db.Decimal(10, 2)
+  monto_exonerado                                             Decimal                  @default(0) @db.Decimal(10, 2)
+  monto_compensado                                            Decimal                  @default(0) @db.Decimal(10, 2)
+  saldo                                                       Decimal                  @db.Decimal(10, 2)
+  estado                                                      String                   @default("PENDIENTE") @db.VarChar(20)
+  id_faena                                                    BigInt?
+  id_asamblea                                                 BigInt?
+  observaciones                                               String?
+  created_at                                                  DateTime                 @default(now()) @db.Timestamptz(6)
+  created_by_user                                             BigInt
+  updated_at                                                  DateTime?                @db.Timestamptz(6)
+  updated_by_user                                             BigInt?
+  anulada_at                                                  DateTime?                @db.Timestamptz(6)
+  anulada_by_user                                             BigInt?
+  motivo_anulacion                                            String?
+  obligacion_movimientos                                      obligacion_movimientos[]
+  obligacion_pagos                                            obligacion_pagos[]
+  auth_users_obligaciones_persona_anulada_by_userToauth_users auth_users?              @relation("obligaciones_persona_anulada_by_userToauth_users", fields: [anulada_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_anulada_by")
+  asambleas                                                   asambleas?               @relation(fields: [id_tenant, id_asamblea], references: [id_tenant, id_asamblea], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_asamblea")
+  conceptos_cobro                                             conceptos_cobro          @relation(fields: [id_tenant, id_concepto_cobro], references: [id_tenant, id_concepto_cobro], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_concepto")
+  auth_users_obligaciones_persona_created_by_userToauth_users auth_users               @relation("obligaciones_persona_created_by_userToauth_users", fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_created_by")
+  faenas                                                      faenas?                  @relation(fields: [id_tenant, id_faena], references: [id_tenant, id_faena], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_faena")
+  personas                                                    personas                 @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_persona")
+  auth_users_obligaciones_persona_updated_by_userToauth_users auth_users?              @relation("obligaciones_persona_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_updated_by")
+
+  @@id([id_tenant, id_obligacion], map: "pk_obligaciones_persona")
+  @@index([id_tenant, estado], map: "inx_obligaciones_persona_estado")
+  @@index([id_tenant, id_persona], map: "inx_obligaciones_persona_persona")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model persona_condiciones {
+  id_tenant            BigInt
+  id_persona_condicion BigInt     @default(autoincrement())
+  id_persona           BigInt
+  condicion            String     @db.VarChar(20)
+  fecha_inicio         DateTime   @db.Date
+  fecha_fin            DateTime?  @db.Date
+  observaciones        String?
+  created_at           DateTime   @default(now()) @db.Timestamptz(6)
+  created_by_user      BigInt
+  personas             personas   @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_pc_persona")
+  auth_users           auth_users @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_pc_user")
+
+  @@id([id_tenant, id_persona_condicion], map: "pk_persona_condiciones")
 }

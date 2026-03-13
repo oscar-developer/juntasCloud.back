@@ -21,4 +21,7 @@ export class JuntaMiembroResponseDto {
 
   @ApiProperty({ type: String, nullable: true, example: '2026-12-31T00:00:00.000Z' })
   fechaFin!: Date | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Periodo regular 2026' })
+  observaciones!: string | null;
 }

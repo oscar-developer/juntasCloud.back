@@ -31,6 +31,26 @@ export class CreateAsistenciaAsambleaDto {
   @IsBoolean()
   esPadronadoEnMomento!: boolean;
 
+  @ApiPropertyOptional({ type: Boolean, example: false })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  tieneDerechoVoto?: boolean;
+
+  @ApiPropertyOptional({ type: Boolean, example: false })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  votoEmitido?: boolean;
+
   @ApiPropertyOptional({ type: String, nullable: true, example: 'Invitado' })
   @IsOptional()
   @IsString()

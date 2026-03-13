@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -21,8 +20,14 @@ export class TerrenosService {
       const terreno = await tx.terrenos.create({
         data: {
           id_tenant: tenantId,
+          codigo_lote: this.normalizeNullableText(dto.codigoLote),
+          manzana: this.normalizeNullableText(dto.manzana),
+          numero_lote: this.normalizeNullableText(dto.numeroLote),
           descripcion: this.normalizeRequiredText(dto.descripcion, 'descripcion'),
-          area_aprox_m2: dto.areaAproxM2 ?? null,
+          area_aprox_m2: this.normalizeNullableNumber(dto.areaAproxM2),
+          area_legal_m2: this.normalizeNullableNumber(dto.areaLegalM2),
+          partida_registral: this.normalizeNullableText(dto.partidaRegistral),
+          ubicacion: this.normalizeNullableText(dto.ubicacion),
           estado: dto.estado ?? 'EN_USO',
           observaciones: this.normalizeNullableText(dto.observaciones),
         },
@@ -38,14 +43,23 @@ export class TerrenosService {
   ): Promise<TerrenoResponseDto[]> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const search = query.search?.trim();
+    const search = this.normalizeFilterText(query.search);
 
     return this.withTenantContext(userId, tenantId, async (tx) => {
       const terrenos = await tx.terrenos.findMany({
         where: {
           id_tenant: tenantId,
           estado: query.estado,
-          descripcion: search ? { contains: search, mode: 'insensitive' } : undefined,
+          OR: search
+            ? [
+                { descripcion: { contains: search, mode: 'insensitive' } },
+                { codigo_lote: { contains: search, mode: 'insensitive' } },
+                { manzana: { contains: search, mode: 'insensitive' } },
+                { numero_lote: { contains: search, mode: 'insensitive' } },
+                { partida_registral: { contains: search, mode: 'insensitive' } },
+                { ubicacion: { contains: search, mode: 'insensitive' } },
+              ]
+            : undefined,
         },
         orderBy: { id_terreno: 'desc' },
         skip: (page - 1) * pageSize,
@@ -94,13 +108,20 @@ export class TerrenosService {
             },
           },
           data: {
+            codigo_lote: this.normalizeOptionalNullableText(dto.codigoLote),
+            manzana: this.normalizeOptionalNullableText(dto.manzana),
+            numero_lote: this.normalizeOptionalNullableText(dto.numeroLote),
             descripcion:
               dto.descripcion !== undefined
                 ? this.normalizeRequiredText(dto.descripcion, 'descripcion')
                 : undefined,
-            area_aprox_m2: dto.areaAproxM2 ?? undefined,
+            area_aprox_m2: this.normalizeOptionalNullableNumber(dto.areaAproxM2),
+            area_legal_m2: this.normalizeOptionalNullableNumber(dto.areaLegalM2),
+            partida_registral: this.normalizeOptionalNullableText(dto.partidaRegistral),
+            ubicacion: this.normalizeOptionalNullableText(dto.ubicacion),
             estado: dto.estado,
             observaciones: this.normalizeOptionalNullableText(dto.observaciones),
+            updated_at: new Date(),
           },
         });
         return this.toResponse(terreno);
@@ -114,16 +135,20 @@ export class TerrenosService {
   async remove(tenantId: bigint, userId: bigint, idTerreno: bigint): Promise<void> {
     await this.withTenantContext(userId, tenantId, async (tx) => {
       try {
-        await tx.terrenos.delete({
+        await tx.terrenos.update({
           where: {
             id_tenant_id_terreno: {
               id_tenant: tenantId,
               id_terreno: idTerreno,
             },
           },
+          data: {
+            estado: 'RESERVA',
+            updated_at: new Date(),
+          },
         });
       } catch (error) {
-        this.handleDeleteErrors(error);
+        this.handleKnownErrors(error);
         throw error;
       }
     });
@@ -178,38 +203,53 @@ export class TerrenosService {
     return this.normalizeNullableText(value);
   }
 
+  private normalizeNullableNumber(value?: number | null): number | null {
+    if (value === undefined || value === null) return null;
+    return value;
+  }
+
+  private normalizeOptionalNullableNumber(value?: number | null): number | null | undefined {
+    if (value === undefined) return undefined;
+    return this.normalizeNullableNumber(value);
+  }
+
+  private normalizeFilterText(value?: string): string | undefined {
+    if (value === undefined) return undefined;
+    const normalized = value.trim();
+    return normalized || undefined;
+  }
+
   private handleKnownErrors(error: unknown): void {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       throw new NotFoundException('No se encontro el terreno solicitado.');
     }
   }
 
-  private handleDeleteErrors(error: unknown): void {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2003') {
-        throw new ConflictException(
-          'No se puede eliminar el terreno porque tiene relaciones asociadas.',
-        );
-      }
-      if (error.code === 'P2025') {
-        throw new NotFoundException('No se encontro el terreno solicitado.');
-      }
-    }
-  }
-
   private toResponse(terreno: {
     id_tenant: bigint;
     id_terreno: bigint;
+    codigo_lote: string | null;
+    manzana: string | null;
+    numero_lote: string | null;
     descripcion: string;
     area_aprox_m2: Prisma.Decimal | null;
+    area_legal_m2: Prisma.Decimal | null;
+    partida_registral: string | null;
+    ubicacion: string | null;
     estado: string;
     observaciones: string | null;
   }): TerrenoResponseDto {
     return {
       idTenant: Number(terreno.id_tenant),
       idTerreno: Number(terreno.id_terreno),
+      codigoLote: terreno.codigo_lote,
+      manzana: terreno.manzana,
+      numeroLote: terreno.numero_lote,
       descripcion: terreno.descripcion,
       areaAproxM2: terreno.area_aprox_m2 === null ? null : Number(terreno.area_aprox_m2),
+      areaLegalM2: terreno.area_legal_m2 === null ? null : Number(terreno.area_legal_m2),
+      partidaRegistral: terreno.partida_registral,
+      ubicacion: terreno.ubicacion,
       estado: terreno.estado,
       observaciones: terreno.observaciones,
     };

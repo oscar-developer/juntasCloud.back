@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsDateString,
+  IsEmail,
   IsIn,
   IsOptional,
   IsString,
@@ -33,11 +34,22 @@ export class CreatePersonaDto {
   @MaxLength(15)
   dni?: string | null;
 
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'juan@correo.com' })
+  @IsOptional()
+  @IsEmail()
+  email?: string | null;
+
   @ApiPropertyOptional({ type: String, nullable: true, example: '999888777', maxLength: 20 })
   @IsOptional()
   @IsString()
   @MaxLength(20)
   telefono?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'Av. Principal 123', maxLength: 200 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  direccion?: string | null;
 
   @ApiPropertyOptional({
     type: String,
@@ -55,10 +67,10 @@ export class CreatePersonaDto {
   @IsIn(['PADRONADO', 'NO_PADRONADO', 'INVITADO'])
   tipoParticipante?: 'PADRONADO' | 'NO_PADRONADO' | 'INVITADO';
 
-  @ApiPropertyOptional({ enum: ['ACTIVO', 'SUSPENDIDO', 'RETIRADO'] })
+  @ApiPropertyOptional({ enum: ['ACTIVO', 'SUSPENDIDO', 'RETIRADO', 'FALLECIDO'] })
   @IsOptional()
-  @IsIn(['ACTIVO', 'SUSPENDIDO', 'RETIRADO'])
-  estado?: 'ACTIVO' | 'SUSPENDIDO' | 'RETIRADO';
+  @IsIn(['ACTIVO', 'SUSPENDIDO', 'RETIRADO', 'FALLECIDO'])
+  estado?: 'ACTIVO' | 'SUSPENDIDO' | 'RETIRADO' | 'FALLECIDO';
 
   @ApiPropertyOptional({
     type: String,
@@ -68,6 +80,16 @@ export class CreatePersonaDto {
   @IsOptional()
   @IsDateString()
   fechaRegistro?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: '2026-03-13',
+    description: 'Fecha ISO en formato YYYY-MM-DD',
+  })
+  @IsOptional()
+  @IsDateString()
+  fechaBaja?: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'Observaciones' })
   @IsOptional()

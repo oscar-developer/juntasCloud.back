@@ -19,6 +19,7 @@ export class JuntasDirectivasService {
   async create(tenantId: bigint, userId: bigint, dto: CreateJuntaDirectivaDto) {
     return this.withTenantContext(userId, tenantId, async (tx) => {
       await this.assertSingleVigente(tx, tenantId, dto.estado ?? 'VIGENTE');
+      const fechaEleccion = dto.fechaEleccion ? this.toDate(dto.fechaEleccion, 'fechaEleccion') : null;
       const fechaInicio = this.toDate(dto.fechaInicio, 'fechaInicio');
       const fechaFin = dto.fechaFin ? this.toDate(dto.fechaFin, 'fechaFin') : null;
       this.assertDateOrder(fechaInicio, fechaFin);
@@ -26,9 +27,11 @@ export class JuntasDirectivasService {
         data: {
           id_tenant: tenantId,
           nombre: this.required(dto.nombre, 'nombre'),
+          fecha_eleccion: fechaEleccion,
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFin,
           estado: dto.estado ?? 'VIGENTE',
+          documento_sustento: this.optionalNullable(dto.documentoSustento),
           observaciones: this.nullable(dto.observaciones),
         },
       });
@@ -64,6 +67,12 @@ export class JuntasDirectivasService {
 
   async update(tenantId: bigint, userId: bigint, idJunta: bigint, dto: UpdateJuntaDirectivaDto) {
     return this.withTenantContext(userId, tenantId, async (tx) => {
+      const fechaEleccion =
+        dto.fechaEleccion !== undefined
+          ? dto.fechaEleccion
+            ? this.toDate(dto.fechaEleccion, 'fechaEleccion')
+            : null
+          : undefined;
       const fechaInicio = dto.fechaInicio ? this.toDate(dto.fechaInicio, 'fechaInicio') : undefined;
       const fechaFin = dto.fechaFin !== undefined ? (dto.fechaFin ? this.toDate(dto.fechaFin, 'fechaFin') : null) : undefined;
       if (fechaInicio || fechaFin !== undefined) {
@@ -81,9 +90,11 @@ export class JuntasDirectivasService {
           where: { id_tenant_id_junta: { id_tenant: tenantId, id_junta: idJunta } },
           data: {
             nombre: dto.nombre !== undefined ? this.required(dto.nombre, 'nombre') : undefined,
+            fecha_eleccion: fechaEleccion,
             fecha_inicio: fechaInicio,
             fecha_fin: fechaFin,
             estado: dto.estado,
+            documento_sustento: this.optionalNullable(dto.documentoSustento),
             observaciones: this.optionalNullable(dto.observaciones),
           },
         });
@@ -173,15 +184,25 @@ export class JuntasDirectivasService {
     }
   }
   private toResponse(item: {
-    id_tenant: bigint; id_junta: bigint; nombre: string; fecha_inicio: Date; fecha_fin: Date | null; estado: string; observaciones: string | null;
+    id_tenant: bigint;
+    id_junta: bigint;
+    nombre: string;
+    fecha_eleccion: Date | null;
+    fecha_inicio: Date;
+    fecha_fin: Date | null;
+    estado: string;
+    documento_sustento: string | null;
+    observaciones: string | null;
   }): JuntaDirectivaResponseDto {
     return {
       idTenant: Number(item.id_tenant),
       idJunta: Number(item.id_junta),
       nombre: item.nombre,
+      fechaEleccion: item.fecha_eleccion,
       fechaInicio: item.fecha_inicio,
       fechaFin: item.fecha_fin,
       estado: item.estado,
+      documentoSustento: item.documento_sustento,
       observaciones: item.observaciones,
     };
   }

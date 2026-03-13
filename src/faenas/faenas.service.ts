@@ -12,9 +12,15 @@ export class FaenasService {
   async create(tenantId: bigint, userId: bigint, dto: CreateFaenaDto) {
     return this.ctx(userId, tenantId, async (tx) => this.toRes(await tx.faenas.create({ data: {
       id_tenant: tenantId,
-      fecha: this.date(dto.fecha, 'fecha'),
+      fecha_programada: this.date(dto.fechaProgramada, 'fechaProgramada'),
+      hora_inicio: this.optionalTime(dto.horaInicio, 'horaInicio'),
+      hora_fin: this.optionalTime(dto.horaFin, 'horaFin'),
       descripcion: this.req(dto.descripcion, 'descripcion'),
       lugar: this.n(dto.lugar),
+      tipo_faena: dto.tipoFaena ?? 'ORDINARIA',
+      es_obligatoria: dto.esObligatoria ?? true,
+      estado: dto.estado ?? 'PROGRAMADA',
+      monto_multa_base: dto.montoMultaBase ?? null,
       observaciones: this.n(dto.observaciones),
     } })));
   }
@@ -25,7 +31,9 @@ export class FaenasService {
     return this.ctx(userId, tenantId, async (tx) => (await tx.faenas.findMany({
       where: {
         id_tenant: tenantId,
-        fecha: from || to ? { gte: from, lte: to } : undefined,
+        fecha_programada: from || to ? { gte: from, lte: to } : undefined,
+        tipo_faena: query.tipoFaena,
+        estado: query.estado,
         OR: s ? [{ descripcion: { contains: s, mode: 'insensitive' } }, { lugar: { contains: s, mode: 'insensitive' } }] : undefined,
       },
       orderBy: { id_faena: 'desc' },
@@ -42,9 +50,15 @@ export class FaenasService {
         return this.toRes(await tx.faenas.update({
           where: { id_tenant_id_faena: { id_tenant: tenantId, id_faena: id } },
           data: {
-            fecha: dto.fecha !== undefined ? this.date(dto.fecha, 'fecha') : undefined,
+            fecha_programada: dto.fechaProgramada !== undefined ? this.date(dto.fechaProgramada, 'fechaProgramada') : undefined,
+            hora_inicio: dto.horaInicio !== undefined ? this.optionalTime(dto.horaInicio, 'horaInicio') : undefined,
+            hora_fin: dto.horaFin !== undefined ? this.optionalTime(dto.horaFin, 'horaFin') : undefined,
             descripcion: dto.descripcion !== undefined ? this.req(dto.descripcion, 'descripcion') : undefined,
             lugar: this.on(dto.lugar),
+            tipo_faena: dto.tipoFaena,
+            es_obligatoria: dto.esObligatoria,
+            estado: dto.estado,
+            monto_multa_base: dto.montoMultaBase !== undefined ? dto.montoMultaBase : undefined,
             observaciones: this.on(dto.observaciones),
           },
         }));
@@ -75,8 +89,46 @@ export class FaenasService {
   private n(v?: string | null) { if (v === undefined || v === null) return null; const n = v.trim(); return n || null; }
   private on(v?: string | null) { if (v === undefined) return undefined; return this.n(v); }
   private date(v: string, f: string) { const d = new Date(v); if (Number.isNaN(d.getTime())) throw new BadRequestException(`${f} no tiene formato valido.`); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); }
+  private optionalTime(v: string | null | undefined, f: string) { if (v === undefined || v === null) return null; return this.time(v, f); }
+  private time(v: string, f: string) {
+    const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(v);
+    if (!match) throw new BadRequestException(`${f} debe tener formato HH:mm o HH:mm:ss.`);
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    const seconds = Number(match[3] ?? '0');
+    if (hours > 23 || minutes > 59 || seconds > 59) {
+      throw new BadRequestException(`${f} no tiene una hora valida.`);
+    }
+    return new Date(Date.UTC(1970, 0, 1, hours, minutes, seconds));
+  }
   private known(e: unknown, msg: string) { if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') throw new NotFoundException(msg); }
-  private toRes(i: { id_tenant: bigint; id_faena: bigint; fecha: Date; descripcion: string; lugar: string | null; observaciones: string | null; }): FaenaResponseDto {
-    return { idTenant: Number(i.id_tenant), idFaena: Number(i.id_faena), fecha: i.fecha, descripcion: i.descripcion, lugar: i.lugar, observaciones: i.observaciones };
+  private toRes(i: {
+    id_tenant: bigint;
+    id_faena: bigint;
+    fecha_programada: Date;
+    hora_inicio: Date | null;
+    hora_fin: Date | null;
+    descripcion: string;
+    lugar: string | null;
+    tipo_faena: string;
+    es_obligatoria: boolean;
+    estado: string;
+    monto_multa_base: Prisma.Decimal | null;
+    observaciones: string | null;
+  }): FaenaResponseDto {
+    return {
+      idTenant: Number(i.id_tenant),
+      idFaena: Number(i.id_faena),
+      fechaProgramada: i.fecha_programada,
+      horaInicio: i.hora_inicio,
+      horaFin: i.hora_fin,
+      descripcion: i.descripcion,
+      lugar: i.lugar,
+      tipoFaena: i.tipo_faena,
+      esObligatoria: i.es_obligatoria,
+      estado: i.estado,
+      montoMultaBase: i.monto_multa_base === null ? null : Number(i.monto_multa_base),
+      observaciones: i.observaciones,
+    };
   }
 }

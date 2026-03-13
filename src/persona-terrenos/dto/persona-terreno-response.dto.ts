@@ -16,6 +16,6 @@ export class PersonaTerrenoResponseDto {
   @ApiProperty({ enum: ['PROPIETARIO', 'POSEEDOR', 'COPROPIETARIO', 'FAMILIAR', 'OTRO'] })
   tipoRelacion!: string;
 
-  @ApiProperty({ type: Number, nullable: true, example: 50 })
+  @ApiProperty({ type: Number, nullable: true, example: 50, minimum: 0, maximum: 100 })
   porcentajeParticipacion!: number | null;
 }

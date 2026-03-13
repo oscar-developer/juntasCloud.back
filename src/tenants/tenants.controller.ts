@@ -6,13 +6,14 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   Query,
   Req,
   UnauthorizedException,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -36,6 +37,7 @@ import { TenantsService } from './tenants.service';
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('tenants')
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 
@@ -55,12 +57,8 @@ export class TenantsController {
   @ApiOkResponse({ type: TenantResponseDto, isArray: true })
   findAll(
     @Req() req: Request,
-    @Query('nombre') nombre?: string,
-    @Query('estado') estado?: 'ACTIVO' | 'INACTIVO',
-    @Query('skip', new ParseIntPipe({ optional: true })) skip?: number,
-    @Query('take', new ParseIntPipe({ optional: true })) take?: number,
+    @Query() query: QueryTenantsDto,
   ): Promise<TenantResponseDto[]> {
-    const query: QueryTenantsDto = { nombre, estado, skip, take };
     return this.tenantsService.findAll(query, this.getUserId(req));
   }
 

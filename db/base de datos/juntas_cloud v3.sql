@@ -104,10 +104,12 @@ CREATE TABLE tenants (
   numero_documento     VARCHAR(20) NULL,
   estado               VARCHAR(15) NOT NULL DEFAULT 'ACTIVO',
   observaciones        VARCHAR(300),
+  owner_user_id        BIGINT NOT NULL,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
 
   CONSTRAINT pk_tenants PRIMARY KEY (id_tenant),
+  CONSTRAINT fk_tenants_owner FOREIGN KEY (owner_user_id) REFERENCES auth_users(id_user),
   CONSTRAINT ux_tenants_nombre UNIQUE (nombre),
   CONSTRAINT ck_tenants_estado CHECK (estado IN ('ACTIVO','INACTIVO','SUSPENDIDO')),
   CONSTRAINT ck_tenants_tipo_documento CHECK (
@@ -921,7 +923,8 @@ CREATE TABLE audit_log (
 -- Tenants
 ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY tenants_select_policy
+-- A) Ver tenants donde soy miembro activo
+CREATE POLICY tenants_select_by_membership
 ON tenants
 FOR SELECT
 USING (
@@ -929,24 +932,58 @@ USING (
     SELECT 1
     FROM tenant_users tu
     WHERE tu.id_tenant = tenants.id_tenant
-      AND tu.id_user = current_setting('app.user_id', true)::bigint
+      AND tu.id_user = current_setting('app.user_id')::bigint
       AND tu.estado = 'ACTIVO'
   )
 );
 
-CREATE POLICY tenants_insert_policy
+-- B) Ver tenants donde soy owner (útil para recién creado)
+CREATE POLICY tenants_select_by_owner
+ON tenants
+FOR SELECT
+USING (
+  owner_user_id = current_setting('app.user_id')::bigint
+);
+
+-- C) Permitir INSERT solo si el owner es el usuario actual
+CREATE POLICY tenants_insert_by_owner
 ON tenants
 FOR INSERT
-WITH CHECK (true);
+WITH CHECK (
+  owner_user_id = current_setting('app.user_id')::bigint
+);
+
+-- (Opcional) Permitir UPDATE solo al owner
+CREATE POLICY tenants_update_by_owner
+ON tenants
+FOR UPDATE
+USING (
+  owner_user_id = current_setting('app.user_id')::bigint
+)
+WITH CHECK (
+  owner_user_id = current_setting('app.user_id')::bigint
+);
+-- DELETE
+CREATE POLICY tenants_delete_by_owner
+ON tenants
+FOR DELETE
+USING (
+  owner_user_id = current_setting('app.user_id')::bigint
+);
+
+
 
 -- Tenant users
+-- 5.2) Tenant_users: un usuario puede ver solo sus memberships
 ALTER TABLE tenant_users ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_users_self_policy
 ON tenant_users
-FOR SELECT
 USING (
-  id_user = current_setting('app.user_id', true)::bigint
+  id_user = current_setting('app.user_id')::bigint
+)
+WITH CHECK (
+  id_user = current_setting('app.user_id')::bigint
 );
 
 -- =========================================================

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -31,6 +32,7 @@ export class TenantsService {
             numero_documento: numeroDocumento,
             estado: dto.estado ?? 'ACTIVO',
             observaciones,
+            owner_user_id: userId,
           },
           select: this.tenantSelect(),
         });
@@ -45,10 +47,7 @@ export class TenantsService {
           },
         });
 
-        return this.toResponse({
-          ...tenant,
-          tenant_users: { id_user: userId },
-        });
+        return this.toResponse(tenant);
       });
     } catch (error) {
       this.handleKnownErrors(error);
@@ -113,8 +112,10 @@ export class TenantsService {
     );
 
     try {
-      const tenant = await this.withUserContext(userId, (tx) =>
-        tx.tenants.update({
+      const tenant = await this.withUserContext(userId, async (tx) => {
+        await this.ensureOwnerAccess(tx, id, userId);
+
+        return tx.tenants.update({
           select: this.tenantSelect(),
           where: { id_tenant: id },
           data: {
@@ -125,8 +126,8 @@ export class TenantsService {
             observaciones,
             updated_at: new Date(),
           },
-        }),
-      );
+        });
+      });
 
       return this.toResponse(tenant);
     } catch (error) {
@@ -138,6 +139,8 @@ export class TenantsService {
   async remove(id: bigint, userId: bigint): Promise<void> {
     try {
       await this.withUserContext(userId, async (tx) => {
+        await this.ensureOwnerAccess(tx, id, userId);
+
         await tx.tenants.update({
           where: { id_tenant: id },
           data: {
@@ -211,6 +214,30 @@ export class TenantsService {
     }
   }
 
+  private async ensureOwnerAccess(
+    tx: Prisma.TransactionClient,
+    id: bigint,
+    userId: bigint,
+  ): Promise<void> {
+    const tenant = await tx.tenants.findUnique({
+      where: { id_tenant: id },
+      select: {
+        id_tenant: true,
+        owner_user_id: true,
+      },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`No existe tenant con id ${id.toString()}`);
+    }
+
+    if (tenant.owner_user_id !== userId) {
+      throw new ForbiddenException(
+        'Solo el owner del tenant puede actualizarlo o eliminarlo.',
+      );
+    }
+  }
+
   private tenantSelect() {
     return {
       id_tenant: true,
@@ -220,11 +247,7 @@ export class TenantsService {
       estado: true,
       created_at: true,
       observaciones: true,
-      tenant_users: {
-        select: {
-          id_user: true,
-        },
-      },
+      owner_user_id: true,
     } satisfies Prisma.tenantsSelect;
   }
 
@@ -275,7 +298,7 @@ export class TenantsService {
     estado: string;
     created_at: Date;
     observaciones: string | null;
-    tenant_users?: { id_user: bigint } | null;
+    owner_user_id: bigint;
   }): TenantResponseDto {
     return {
       idTenant: Number(tenant.id_tenant),
@@ -285,10 +308,7 @@ export class TenantsService {
       estado: tenant.estado,
       createdAt: tenant.created_at,
       observaciones: tenant.observaciones,
-      ownerUserId:
-        tenant.tenant_users === undefined || tenant.tenant_users === null
-          ? null
-          : Number(tenant.tenant_users.id_user),
+      ownerUserId: Number(tenant.owner_user_id),
     };
   }
 }

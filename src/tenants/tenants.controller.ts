@@ -18,6 +18,7 @@ import {
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
@@ -74,6 +75,7 @@ export class TenantsController {
   @ApiOperation({ summary: 'Actualizar tenant por id_tenant' })
   @ApiParam({ name: 'id', type: Number, description: 'id_tenant de tenants' })
   @ApiOkResponse({ type: TenantResponseDto })
+  @ApiForbiddenResponse({ description: 'Solo el owner del tenant puede actualizarlo.' })
   update(
     @Param('id') id: string,
     @Body() dto: UpdateTenantDto,
@@ -87,6 +89,7 @@ export class TenantsController {
   @ApiOperation({ summary: 'Eliminar tenant por id_tenant' })
   @ApiParam({ name: 'id', type: Number, description: 'id_tenant de tenants' })
   @ApiNoContentResponse({ description: 'Tenant eliminado' })
+  @ApiForbiddenResponse({ description: 'Solo el owner del tenant puede eliminarlo.' })
   async remove(@Param('id') id: string, @Req() req: Request): Promise<void> {
     await this.tenantsService.remove(this.tenantsService.parseId(id), this.getUserId(req));
   }

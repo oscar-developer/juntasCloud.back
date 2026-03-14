@@ -127,6 +127,7 @@ model auth_users {
   tenant_invitations                                                    tenant_invitations[]
   tenant_users_tenant_users_invited_byToauth_users                      tenant_users[]           @relation("tenant_users_invited_byToauth_users")
   tenant_users_tenant_users_id_userToauth_users                         tenant_users[]           @relation("tenant_users_id_userToauth_users")
+  tenants                                                               tenants[]
 
   @@index([estado], map: "inx_auth_users_estado")
 }
@@ -410,6 +411,7 @@ model tenants {
   observaciones       String?               @db.VarChar(300)
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  owner_user_id       BigInt
   asambleas           asambleas[]
   asistencia_asamblea asistencia_asamblea[]
   bienes              bienes[]
@@ -424,6 +426,7 @@ model tenants {
   personas            personas[]
   tenant_invitations  tenant_invitations[]
   tenant_users        tenant_users?
+  auth_users          auth_users            @relation(fields: [owner_user_id], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tenants_owner")
   terrenos            terrenos[]
 
   @@index([estado], map: "inx_tenants_estado")

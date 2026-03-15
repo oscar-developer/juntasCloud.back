@@ -440,8 +440,8 @@ export class PersonasService {
   private resolveCondition(
     estado: string,
     tipoParticipante: string,
-  ): 'PADRONADO' | 'NO_PADRONADO' | 'INVITADO' | 'SUSPENDIDO' | 'RETIRADO' | null {
-    if (estado === 'SUSPENDIDO' || estado === 'RETIRADO') {
+  ): 'PADRONADO' | 'NO_PADRONADO' | 'INVITADO' | 'SUSPENDIDO' | 'RETIRADO' | 'FALLECIDO' | null {
+    if (estado === 'SUSPENDIDO' || estado === 'RETIRADO'|| estado === 'FALLECIDO') {
       return estado;
     }
     if (

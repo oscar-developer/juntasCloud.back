@@ -165,12 +165,12 @@ CREATE TABLE tenant_invitations (
   email                CITEXT NOT NULL,--A qué correo se está invitando.(No necesitas que el usuario exista aún.)
   role                 VARCHAR(15) NOT NULL DEFAULT 'MEMBER',--Qué rol tendrá si acepta.
   token_hash           VARCHAR(255) NOT NULL,--Token único para aceptar la invitación.
-  status               VARCHAR(15) NOT NULL DEFAULT 'PENDING',
-  expires_at           TIMESTAMPTZ NOT NULL,
-  accepted_at          TIMESTAMPTZ NULL,
-  revoked_at           TIMESTAMPTZ NULL,
-  invited_by           BIGINT NOT NULL,
-  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  status               VARCHAR(15) NOT NULL DEFAULT 'PENDING',--Estado actual de la invitación.
+  expires_at           TIMESTAMPTZ NOT NULL,--Fecha límite para aceptar.
+  accepted_at          TIMESTAMPTZ NULL,--Cuándo se aceptó la invitación.
+  revoked_at           TIMESTAMPTZ NULL,--Cuándo se rechazo la invitación.
+  invited_by           BIGINT NOT NULL,--Qué usuario hizo la invitación.
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),--Cuándo se creó la invitación.
 
   CONSTRAINT pk_tenant_invitations PRIMARY KEY (id_invitation),
   CONSTRAINT fk_inv_tenant FOREIGN KEY (id_tenant) REFERENCES tenants(id_tenant),
@@ -264,11 +264,10 @@ CREATE TABLE persona_condiciones (
   CONSTRAINT fk_pc_user FOREIGN KEY (created_by_user)
     REFERENCES auth_users(id_user),
   CONSTRAINT ck_pc_condicion CHECK (
-    condicion IN ('PADRONADO','NO_PADRONADO','INVITADO','SUSPENDIDO','RETIRADO')
+    condicion IN ('PADRONADO','NO_PADRONADO','INVITADO','SUSPENDIDO','RETIRADO','FALLECIDO')
   ),
   CONSTRAINT ck_pc_fechas CHECK (fecha_fin IS NULL OR fecha_fin >= fecha_inicio)
 );
-
 
 -- =========================================================
 -- 5) TERRENOS / BIENES

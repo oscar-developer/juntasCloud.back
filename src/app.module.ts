@@ -17,6 +17,7 @@ import { JuntaMiembrosModule } from './junta-miembros/junta-miembros.module';
 import { FaenaParticipacionesModule } from './faena-participaciones/faena-participaciones.module';
 import { AsistenciaAsambleaModule } from './asistencia-asamblea/asistencia-asamblea.module';
 import { CajaMovimientosModule } from './caja-movimientos/caja-movimientos.module';
+import { CajaCategoriasModule } from './caja-categorias/caja-categorias.module';
 
 @Module({  
   imports: [
@@ -35,6 +36,7 @@ import { CajaMovimientosModule } from './caja-movimientos/caja-movimientos.modul
     JuntaMiembrosModule,
     FaenaParticipacionesModule,
     AsistenciaAsambleaModule,
+    CajaCategoriasModule,
     CajaMovimientosModule,
   ],
   controllers: [AppController],

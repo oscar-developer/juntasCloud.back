@@ -110,7 +110,7 @@ CREATE TABLE tenants (
 
   CONSTRAINT pk_tenants PRIMARY KEY (id_tenant),
   CONSTRAINT fk_tenants_owner FOREIGN KEY (owner_user_id) REFERENCES auth_users(id_user),
-  CONSTRAINT ux_tenants_nombre UNIQUE (nombre),
+  CONSTRAINT ux_tenants_nombre UNIQUE (owner_user_id, nombre),
   CONSTRAINT ck_tenants_estado CHECK (estado IN ('ACTIVO','INACTIVO','SUSPENDIDO')),
   CONSTRAINT ck_tenants_tipo_documento CHECK (
     tipo_documento IS NULL OR tipo_documento IN ('RUC','DNI','OTRO')

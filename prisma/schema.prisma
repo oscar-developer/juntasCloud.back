@@ -404,7 +404,7 @@ model tenant_users {
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model tenants {
   id_tenant           BigInt                @id(map: "pk_tenants") @default(autoincrement())
-  nombre              String                @unique(map: "ux_tenants_nombre") @db.VarChar(150)
+  nombre              String                @db.VarChar(150)
   tipo_documento      String?               @db.VarChar(15)
   numero_documento    String?               @db.VarChar(20)
   estado              String                @default("ACTIVO") @db.VarChar(15)
@@ -429,6 +429,7 @@ model tenants {
   auth_users          auth_users            @relation(fields: [owner_user_id], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tenants_owner")
   terrenos            terrenos[]
 
+  @@unique([owner_user_id, nombre], map: "ux_tenants_owner_nombre")
   @@index([estado], map: "inx_tenants_estado")
 }
 

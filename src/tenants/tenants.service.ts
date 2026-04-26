@@ -47,6 +47,12 @@ export class TenantsService {
           },
         });
 
+        await tx.$executeRaw(
+          Prisma.sql`SELECT set_config('app.tenant_id', ${tenant.id_tenant.toString()}, true)`,
+        );
+
+        await this.seedTenantBaseCatalogs(tx, tenant.id_tenant);
+
         return this.toResponse(tenant);
       });
     } catch (error) {
@@ -174,6 +180,44 @@ export class TenantsService {
     });
   }
 
+  private async seedTenantBaseCatalogs(
+    tx: Prisma.TransactionClient,
+    tenantId: bigint,
+  ): Promise<void> {
+    const [conceptosBase, categoriasBase] = await Promise.all([
+      tx.conceptos_cobro_base.findMany({
+        orderBy: { id_concepto_cobro_base: 'asc' },
+      }),
+      tx.caja_categorias_base.findMany({
+        orderBy: { id_categoria_caja_base: 'asc' },
+      }),
+    ]);
+
+    if (conceptosBase.length > 0) {
+      await tx.conceptos_cobro.createMany({
+        data: conceptosBase.map((concepto) => ({
+          id_tenant: tenantId,
+          nombre: concepto.nombre,
+          tipo: concepto.tipo,
+          activo: concepto.activo,
+          requiere_periodo: concepto.requiere_periodo,
+          observaciones: concepto.observaciones,
+        })),
+      });
+    }
+
+    if (categoriasBase.length > 0) {
+      await tx.caja_categorias.createMany({
+        data: categoriasBase.map((categoria) => ({
+          id_tenant: tenantId,
+          nombre: categoria.nombre,
+          tipo: categoria.tipo,
+          activo: categoria.activo,
+        })),
+      });
+    }
+  }
+
   private normalizeSkip(skip?: number): number {
     if (skip === undefined || skip === null) {
       return 0;
@@ -206,7 +250,9 @@ export class TenantsService {
   private handleKnownErrors(error: unknown): void {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        throw new ConflictException('Ya existe un tenant con ese nombre.');
+        throw new ConflictException(
+          'Ya existe un tenant con ese nombre para el owner actual.',
+        );
       }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro el tenant solicitado.');

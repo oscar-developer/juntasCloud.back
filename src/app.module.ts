@@ -18,6 +18,12 @@ import { FaenaParticipacionesModule } from './faena-participaciones/faena-partic
 import { AsistenciaAsambleaModule } from './asistencia-asamblea/asistencia-asamblea.module';
 import { CajaMovimientosModule } from './caja-movimientos/caja-movimientos.module';
 import { CajaCategoriasModule } from './caja-categorias/caja-categorias.module';
+import { ConceptosCobroModule } from './conceptos-cobro/conceptos-cobro.module';
+import { ObligacionesPersonaModule } from './obligaciones-persona/obligaciones-persona.module';
+import { ObligacionPagosModule } from './obligacion-pagos/obligacion-pagos.module';
+import { ObligacionMovimientosModule } from './obligacion-movimientos/obligacion-movimientos.module';
+import { CreditosPersonaModule } from './creditos-persona/creditos-persona.module';
+import { CreditoMovimientosModule } from './credito-movimientos/credito-movimientos.module';
 
 @Module({  
   imports: [
@@ -38,6 +44,12 @@ import { CajaCategoriasModule } from './caja-categorias/caja-categorias.module';
     AsistenciaAsambleaModule,
     CajaCategoriasModule,
     CajaMovimientosModule,
+    ConceptosCobroModule,
+    ObligacionesPersonaModule,
+    ObligacionPagosModule,
+    ObligacionMovimientosModule,
+    CreditosPersonaModule,
+    CreditoMovimientosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

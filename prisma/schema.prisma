@@ -678,3 +678,23 @@ model persona_condiciones {
 
   @@id([id_tenant, id_persona_condicion], map: "pk_persona_condiciones")
 }
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model caja_categorias_base {
+  id_categoria_caja_base BigInt  @id(map: "pk_caja_categorias_base") @default(autoincrement())
+  nombre                 String  @db.VarChar(100)
+  tipo                   String  @db.VarChar(10)
+  activo                 Boolean @default(true)
+
+  @@unique([nombre, tipo], map: "ux_caja_categorias_base_nombre_tipo")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model conceptos_cobro_base {
+  id_concepto_cobro_base BigInt  @id(map: "pk_conceptos_cobro_base") @default(autoincrement())
+  nombre                 String  @db.VarChar(100)
+  tipo                   String  @unique(map: "ux_conceptos_cobro_base_tipo") @db.VarChar(25)
+  activo                 Boolean @default(true)
+  requiere_periodo       Boolean @default(false)
+  observaciones          String?
+}

@@ -12,6 +12,7 @@ INSERT INTO caja_categorias_base
 (nombre, tipo)
 VALUES
 -- Ingresos
+('Saldo inicial recibido', 'INGRESO'),
 ('Cuotas', 'INGRESO'),
 ('Multas', 'INGRESO'),
 ('Aportes', 'INGRESO'),

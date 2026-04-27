@@ -28,6 +28,7 @@ import { RolesGuard } from '../common/auth/roles.guard';
 import { getTenantIdFromHeader } from '../common/tenant/get-tenant-id-from-header';
 import { TenantMembershipGuard } from '../common/tenant/tenant-membership.guard';
 import { AnularCajaMovimientoDto } from './dto/anular-caja-movimiento.dto';
+import { CajaMovimientoListDto } from './dto/caja-movimiento-list.dto';
 import { CajaMovimientoResponseDto } from './dto/caja-movimiento-response.dto';
 import { CreateCajaMovimientoDto } from './dto/create-caja-movimiento.dto';
 import { PaginatedCajaMovimientosResponseDto } from './dto/paginated-caja-movimientos-response.dto';
@@ -55,7 +56,7 @@ export class CajaMovimientosController {
   @Get()
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Listar movimientos de caja' })
-  @ApiOkResponse({ description: 'Retorna un arreglo o un envelope paginado.' })
+  @ApiOkResponse({ type: [CajaMovimientoListDto] })
   findAll(
     @Query() query: QueryCajaMovimientosDto,
     @Req() req: Request,

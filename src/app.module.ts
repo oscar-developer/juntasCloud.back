@@ -24,6 +24,7 @@ import { ObligacionPagosModule } from './obligacion-pagos/obligacion-pagos.modul
 import { ObligacionMovimientosModule } from './obligacion-movimientos/obligacion-movimientos.module';
 import { CreditosPersonaModule } from './creditos-persona/creditos-persona.module';
 import { CreditoMovimientosModule } from './credito-movimientos/credito-movimientos.module';
+import { ReportesCajaModule } from './reportes/Caja/reportes-caja.module';
 
 @Module({  
   imports: [
@@ -50,6 +51,7 @@ import { CreditoMovimientosModule } from './credito-movimientos/credito-movimien
     ObligacionMovimientosModule,
     CreditosPersonaModule,
     CreditoMovimientosModule,
+    ReportesCajaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

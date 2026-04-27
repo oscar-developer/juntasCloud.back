@@ -58,10 +58,10 @@ export class CajaMovimientosService {
           tipo: dto.tipo,
           monto: dto.monto,
           id_categoria_caja: categoria.id_categoria_caja,
-          id_persona: dto.idPersona ? BigInt(dto.idPersona) : null,
-          id_faena: dto.idFaena ? BigInt(dto.idFaena) : null,
-          id_asamblea: dto.idAsamblea ? BigInt(dto.idAsamblea) : null,
-          id_bien: dto.idBien ? BigInt(dto.idBien) : null,
+          id_persona: this.toNullableBigInt(dto.idPersona),
+          id_faena: this.toNullableBigInt(dto.idFaena),
+          id_asamblea: this.toNullableBigInt(dto.idAsamblea),
+          id_bien: this.toNullableBigInt(dto.idBien),
           id_user: userId,
           descripcion: this.nullable(dto.descripcion),
           medio_pago: dto.medioPago,
@@ -199,10 +199,10 @@ export class CajaMovimientosService {
           tipo: dto.tipo,
           monto: dto.monto,
           id_categoria_caja: dto.idCategoriaCaja !== undefined ? categoria.id_categoria_caja : undefined,
-          id_persona: dto.idPersona !== undefined ? BigInt(dto.idPersona) : undefined,
-          id_faena: dto.idFaena !== undefined ? BigInt(dto.idFaena) : undefined,
-          id_asamblea: dto.idAsamblea !== undefined ? BigInt(dto.idAsamblea) : undefined,
-          id_bien: dto.idBien !== undefined ? BigInt(dto.idBien) : undefined,
+          id_persona: this.toOptionalBigInt(dto.idPersona),
+          id_faena: this.toOptionalBigInt(dto.idFaena),
+          id_asamblea: this.toOptionalBigInt(dto.idAsamblea),
+          id_bien: this.toOptionalBigInt(dto.idBien),
           descripcion: dto.descripcion !== undefined ? this.nullable(dto.descripcion) : undefined,
           medio_pago: dto.medioPago,
           doc_referencia:
@@ -298,7 +298,7 @@ export class CajaMovimientosService {
     tenantId: bigint,
     dto: Pick<CreateCajaMovimientoDto, 'idPersona' | 'idFaena' | 'idAsamblea' | 'idBien'>,
   ): Promise<void> {
-    if (dto.idPersona !== undefined) {
+    if (dto.idPersona !== undefined && dto.idPersona !== null) {
       const exists = await tx.personas.findUnique({
         where: { id_tenant_id_persona: { id_tenant: tenantId, id_persona: BigInt(dto.idPersona) } },
         select: { id_persona: true },
@@ -308,7 +308,7 @@ export class CajaMovimientosService {
       }
     }
 
-    if (dto.idFaena !== undefined) {
+    if (dto.idFaena !== undefined && dto.idFaena !== null) {
       const exists = await tx.faenas.findUnique({
         where: { id_tenant_id_faena: { id_tenant: tenantId, id_faena: BigInt(dto.idFaena) } },
         select: { id_faena: true },
@@ -318,7 +318,7 @@ export class CajaMovimientosService {
       }
     }
 
-    if (dto.idAsamblea !== undefined) {
+    if (dto.idAsamblea !== undefined && dto.idAsamblea !== null) {
       const exists = await tx.asambleas.findUnique({
         where: {
           id_tenant_id_asamblea: {
@@ -333,7 +333,7 @@ export class CajaMovimientosService {
       }
     }
 
-    if (dto.idBien !== undefined) {
+    if (dto.idBien !== undefined && dto.idBien !== null) {
       const exists = await tx.bienes.findUnique({
         where: { id_tenant_id_bien: { id_tenant: tenantId, id_bien: BigInt(dto.idBien) } },
         select: { id_bien: true },
@@ -393,6 +393,20 @@ export class CajaMovimientosService {
     if (value === undefined || value === null) return null;
     const normalized = value.trim();
     return normalized || null;
+  }
+
+  private toNullableBigInt(value?: number | null): bigint | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    return BigInt(value);
+  }
+
+  private toOptionalBigInt(value?: number | null): bigint | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    return this.toNullableBigInt(value);
   }
 
   private toDate(value: string, field: string): Date {

@@ -43,28 +43,28 @@ export class CreateCajaMovimientoDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  idPersona?: number;
+  idPersona?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  idFaena?: number;
+  idFaena?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  idAsamblea?: number;
+  idAsamblea?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  idBien?: number;
+  idBien?: number | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'Pago de aporte comunal' })
   @IsOptional()

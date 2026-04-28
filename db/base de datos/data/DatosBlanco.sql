@@ -26,3 +26,27 @@ VALUES
 ('Administración', 'GASTO'),
 ('Eventos', 'GASTO'),
 ('Otros gastos', 'GASTO');
+
+INSERT INTO app_modules (module_code, nombre, grupo, orden) VALUES
+('dashboard', 'Dashboard', 'General', 1),
+('personas', 'Personas', 'Catálogos', 10),
+('terrenos', 'Terrenos', 'Catálogos', 20),
+('persona_terreno', 'Relación Persona-Terreno', 'Catálogos', 30),
+('bienes', 'Bienes', 'Catálogos', 40),
+('juntas_directivas', 'Juntas Directivas', 'Gestión / Organización', 50),
+('junta_miembros', 'Miembros de Junta', 'Gestión / Organización', 60),
+('faenas', 'Faenas', 'Eventos y Asistencia', 70),
+('faena_asistencia', 'Asistencia faena', 'Eventos y Asistencia', 80),
+('asambleas', 'Asambleas', 'Eventos y Asistencia', 90),
+('asamblea_asistencia', 'Asistencia asamblea', 'Eventos y Asistencia', 100),
+('finanzas_resumen', 'Resumen financiero', 'Finanzas', 110),
+('finanzas_caja', 'Caja', 'Finanzas', 120),
+('finanzas_obligaciones', 'Obligaciones / Cobranza', 'Finanzas', 130),
+('finanzas_pagos', 'Pagos', 'Finanzas', 140),
+('finanzas_creditos', 'Créditos', 'Finanzas', 150),
+('finanzas_conceptos_cobro', 'Conceptos de cobro', 'Configuración financiera', 160),
+('finanzas_categorias_caja', 'Categorías de caja', 'Configuración financiera', 170),
+('admin_miembros', 'Miembros del tenant', 'Administración', 180),
+('admin_invitaciones', 'Invitaciones', 'Administración', 190),
+('admin_roles', 'Roles / Perfiles', 'Administración', 200),
+('admin_configuracion', 'Configuración de la junta', 'Administración', 210);

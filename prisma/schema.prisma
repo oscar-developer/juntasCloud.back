@@ -390,6 +390,7 @@ model tenant_users {
   ended_at                                       DateTime?   @db.Timestamptz(6)
   invited_by                                     BigInt?
   id_persona                                     BigInt?
+  id_profile                                     BigInt?
   auth_users_tenant_users_invited_byToauth_users auth_users? @relation("tenant_users_invited_byToauth_users", fields: [invited_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_invited")
   tenants                                        tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_tenant")
   auth_users_tenant_users_id_userToauth_users    auth_users  @relation("tenant_users_id_userToauth_users", fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_user")
@@ -425,6 +426,7 @@ model tenants {
   persona_terreno     persona_terreno[]
   personas            personas[]
   tenant_invitations  tenant_invitations[]
+  tenant_profiles     tenant_profiles[]
   tenant_users        tenant_users?
   auth_users          auth_users            @relation(fields: [owner_user_id], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tenants_owner")
   terrenos            terrenos[]
@@ -698,4 +700,38 @@ model conceptos_cobro_base {
   activo                 Boolean @default(true)
   requiere_periodo       Boolean @default(false)
   observaciones          String?
+}
+
+model app_modules {
+  module_code            String                   @id @db.VarChar(80)
+  nombre                 String                   @db.VarChar(100)
+  grupo                  String                   @db.VarChar(100)
+  orden                  Int                      @default(0)
+  activo                 Boolean                  @default(true)
+  tenant_profile_modules tenant_profile_modules[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tenant_profile_modules {
+  id_tenant       BigInt
+  id_profile      BigInt
+  module_code     String          @db.VarChar(80)
+  access_level    String          @default("SIN_ACCESO") @db.VarChar(20)
+  app_modules     app_modules     @relation(fields: [module_code], references: [module_code], onDelete: NoAction, onUpdate: NoAction, map: "fk_tpm_module")
+  tenant_profiles tenant_profiles @relation(fields: [id_tenant, id_profile], references: [id_tenant, id_profile], onDelete: NoAction, onUpdate: NoAction, map: "fk_tpm_profile")
+
+  @@id([id_tenant, id_profile, module_code], map: "pk_tenant_profile_modules")
+}
+
+model tenant_profiles {
+  id_tenant              BigInt
+  id_profile             BigInt                   @default(autoincrement())
+  nombre                 String                   @db.VarChar(100)
+  descripcion            String?
+  activo                 Boolean                  @default(true)
+  tenant_profile_modules tenant_profile_modules[]
+  tenants                tenants                  @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_tenant")
+
+  @@id([id_tenant, id_profile], map: "pk_tenant_profiles")
+  @@unique([id_tenant, nombre], map: "ux_profiles_nombre")
 }

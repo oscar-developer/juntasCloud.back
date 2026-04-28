@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppModulesModule } from './app-modules/app-modules.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -25,10 +26,15 @@ import { ObligacionMovimientosModule } from './obligacion-movimientos/obligacion
 import { CreditosPersonaModule } from './creditos-persona/creditos-persona.module';
 import { CreditoMovimientosModule } from './credito-movimientos/credito-movimientos.module';
 import { ReportesCajaModule } from './reportes/Caja/reportes-caja.module';
+import { DashboardModule } from './reportes/dashboard/dashboard.module';
+import { DeudasPersonaModule } from './reportes/deudas-persona/deudas-persona.module';
+import { TopModule } from './reportes/top/top.module';
+import { TenantProfilesModule } from './tenant-profiles/tenant-profiles.module';
 
 @Module({  
   imports: [
     PrismaModule,
+    AppModulesModule,
     AuthUsersModule,
     AuthModule,
     TenantsModule,
@@ -52,6 +58,10 @@ import { ReportesCajaModule } from './reportes/Caja/reportes-caja.module';
     CreditosPersonaModule,
     CreditoMovimientosModule,
     ReportesCajaModule,
+    DashboardModule,
+    DeudasPersonaModule,
+    TopModule,
+    TenantProfilesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

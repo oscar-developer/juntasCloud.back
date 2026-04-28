@@ -161,6 +161,27 @@ export class TenantsService {
     }
   }
 
+  async removePermanent(id: bigint, userId: bigint): Promise<void> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw(
+          Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
+        );
+        await tx.$executeRaw(
+          Prisma.sql`SELECT set_config('app.tenant_id', ${id.toString()}, true)`,
+        );
+
+        await this.ensureOwnerAccess(tx, id, userId);
+
+        await tx.$queryRaw(Prisma.sql`SELECT fn_delete_tenant(${id}, ${userId})`);
+      });
+    } catch (error) {
+      this.handleDeleteTenantFunctionError(error);
+      this.handleKnownErrors(error);
+      throw error;
+    }
+  }
+
   parseId(id: string): bigint {
     if (!/^\d+$/.test(id)) {
       throw new BadRequestException('El id_tenant debe ser un numero entero positivo.');
@@ -256,6 +277,21 @@ export class TenantsService {
       }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro el tenant solicitado.');
+      }
+    }
+  }
+
+  private handleDeleteTenantFunctionError(error: unknown): void {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError ||
+      error instanceof Prisma.PrismaClientUnknownRequestError
+    ) {
+      const message = error.message ?? '';
+
+      if (message.includes('Solo el OWNER puede eliminar el tenant')) {
+        throw new ForbiddenException(
+          'Solo el owner del tenant puede eliminarlo definitivamente.',
+        );
       }
     }
   }

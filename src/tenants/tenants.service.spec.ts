@@ -499,4 +499,85 @@ describe('TenantsService', () => {
     await expect(service.remove(405n, 9n)).rejects.toBeInstanceOf(NotFoundException);
     expect(tx.tenants.update).not.toHaveBeenCalled();
   });
+
+  it('removePermanent ejecuta fn_delete_tenant cuando el JWT pertenece al owner', async () => {
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn().mockResolvedValue([{ fn_delete_tenant: null }]),
+      tenants: {
+        findUnique: jest.fn().mockResolvedValue({
+          id_tenant: 80n,
+          owner_user_id: 9n,
+        }),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    await service.removePermanent(80n, 9n);
+
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(tx.tenants.findUnique).toHaveBeenCalledWith({
+      where: { id_tenant: 80n },
+      select: {
+        id_tenant: true,
+        owner_user_id: true,
+      },
+    });
+    expect(tx.$queryRaw).toHaveBeenCalledWith(
+      Prisma.sql`SELECT fn_delete_tenant(${80n}, ${9n})`,
+    );
+  });
+
+  it('removePermanent rechaza con ForbiddenException cuando el usuario no es owner', async () => {
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn(),
+      tenants: {
+        findUnique: jest.fn().mockResolvedValue({
+          id_tenant: 81n,
+          owner_user_id: 5n,
+        }),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    await expect(service.removePermanent(81n, 9n)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('removePermanent traduce el error OWNER de la funcion SQL', async () => {
+    const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn().mockRejectedValue(
+        new Prisma.PrismaClientUnknownRequestError(
+          'Solo el OWNER puede eliminar el tenant',
+          { clientVersion: 'test' },
+        ),
+      ),
+      tenants: {
+        findUnique: jest.fn().mockResolvedValue({
+          id_tenant: 82n,
+          owner_user_id: 9n,
+        }),
+      },
+    };
+
+    prisma.$transaction.mockImplementation(
+      async (fn: (txClient: typeof tx) => Promise<unknown>) => fn(tx),
+    );
+
+    await expect(service.removePermanent(82n, 9n)).rejects.toEqual(
+      new ForbiddenException(
+        'Solo el owner del tenant puede eliminarlo definitivamente.',
+      ),
+    );
+  });
 });

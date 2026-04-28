@@ -84,6 +84,19 @@ export class TenantsController {
     return this.tenantsService.update(this.tenantsService.parseId(id), dto, this.getUserId(req));
   }
 
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Eliminar definitivamente un tenant por id_tenant' })
+  @ApiParam({ name: 'id', type: Number, description: 'id_tenant de tenants' })
+  @ApiNoContentResponse({ description: 'Tenant eliminado definitivamente' })
+  @ApiForbiddenResponse({ description: 'Solo el owner del tenant puede eliminarlo definitivamente.' })
+  async removePermanent(@Param('id') id: string, @Req() req: Request): Promise<void> {
+    await this.tenantsService.removePermanent(
+      this.tenantsService.parseId(id),
+      this.getUserId(req),
+    );
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Eliminar tenant por id_tenant' })

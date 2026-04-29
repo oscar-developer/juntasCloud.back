@@ -12,7 +12,7 @@ export class TenantProfileModuleResponseDto {
   moduleCode!: string;
 
   @ApiProperty({ example: 'Personas' })
-  moduleName!: string;
+  nombre!: string;
 
   @ApiProperty({ example: 'Padron' })
   grupo!: string;

@@ -46,6 +46,7 @@ describe('TenantProfilesService', () => {
       },
       tenant_profile_modules: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
         deleteMany: jest.fn(),
         createMany: jest.fn(),
       },
@@ -65,6 +66,7 @@ describe('TenantProfilesService', () => {
       descripcion: 'Perfil admin',
       activo: true,
     });
+    tx.tenant_profile_modules.findMany.mockResolvedValue([]);
     runWithTx(tx);
 
     const result = await service.create(2n, 9n, {
@@ -75,7 +77,7 @@ describe('TenantProfilesService', () => {
     expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
     expect(tx.tenant_users.findFirst).toHaveBeenCalledWith({
       where: { id_tenant: 2n, id_user: 9n, estado: 'ACTIVO' },
-      select: { id_user: true, role: true },
+      select: { id_user: true, role: true, id_profile: true },
     });
     expect(tx.tenant_profiles.findFirst).toHaveBeenCalledWith({
       where: {
@@ -99,6 +101,13 @@ describe('TenantProfilesService', () => {
       nombre: 'ADMIN',
       descripcion: 'Perfil admin',
       activo: true,
+      createdAt: null,
+      updatedAt: null,
+      totalModules: 0,
+      totalAccess: 0,
+      totalReadOnly: 0,
+      totalNoAccess: 0,
+      modules: [],
     });
   });
 
@@ -122,6 +131,10 @@ describe('TenantProfilesService', () => {
         nombre: 'LECTOR',
         descripcion: null,
         activo: true,
+        tenant_profile_modules: [
+          { access_level: 'ACCESO_TOTAL' },
+          { access_level: 'SOLO_LECTURA' },
+        ],
       },
     ]);
     runWithTx(tx);
@@ -129,11 +142,24 @@ describe('TenantProfilesService', () => {
     const result = await service.findAll(2n, 9n);
 
     expect(tx.tenant_profiles.findMany).toHaveBeenCalledWith({
-      where: { id_tenant: 2n },
+      where: {
+        id_tenant: 2n,
+        activo: undefined,
+        OR: undefined,
+      },
+      include: {
+        tenant_profile_modules: {
+          select: { access_level: true },
+        },
+      },
       orderBy: { id_profile: 'desc' },
+      skip: 0,
+      take: 20,
     });
     expect(result).toHaveLength(1);
     expect(result[0].idProfile).toBe(12);
+    expect(result[0].totalAccess).toBe(1);
+    expect(result[0].totalReadOnly).toBe(1);
   });
 
   it('findOne obtiene perfil por clave compuesta', async () => {
@@ -142,9 +168,24 @@ describe('TenantProfilesService', () => {
       id_tenant: 2n,
       id_profile: 12n,
       nombre: 'LECTOR',
-      descripcion: null,
-      activo: true,
-    });
+        descripcion: null,
+        activo: true,
+      });
+    tx.tenant_profile_modules.findMany.mockResolvedValue([
+      {
+        id_tenant: 2n,
+        id_profile: 12n,
+        module_code: 'dashboard',
+        access_level: 'SOLO_LECTURA',
+        app_modules: {
+          module_code: 'dashboard',
+          nombre: 'Dashboard',
+          grupo: 'General',
+          orden: 1,
+          activo: true,
+        },
+      },
+    ]);
     runWithTx(tx);
 
     const result = await service.findOne(2n, 9n, 12n);
@@ -158,6 +199,18 @@ describe('TenantProfilesService', () => {
       },
     });
     expect(result.nombre).toBe('LECTOR');
+    expect(result.modules).toEqual([
+      {
+        idTenant: 2,
+        idProfile: 12,
+        moduleCode: 'dashboard',
+        nombre: 'Dashboard',
+        grupo: 'General',
+        orden: 1,
+        activo: true,
+        accessLevel: 'SOLO_LECTURA',
+      },
+    ]);
   });
 
   it('update actualiza perfil existente', async () => {
@@ -277,7 +330,7 @@ describe('TenantProfilesService', () => {
       idTenant: 2,
       idProfile: 12,
       moduleCode: 'personas',
-      moduleName: 'Personas',
+      nombre: 'Personas',
       grupo: 'Padron',
       orden: 1,
       activo: true,
@@ -381,12 +434,42 @@ describe('TenantProfilesService', () => {
 
   it('rechaza operaciones para actor sin rol OWNER o ADMIN', async () => {
     const tx = baseTx();
-    tx.tenant_users.findFirst.mockResolvedValue({ id_user: 9n, role: 'MEMBER' });
+    tx.tenant_users.findFirst.mockResolvedValue({
+      id_user: 9n,
+      role: 'MEMBER',
+      id_profile: null,
+    });
     runWithTx(tx);
 
     await expect(service.findAll(2n, 9n)).rejects.toEqual(
       new ForbiddenException('No tiene permisos suficientes para esta operacion.'),
     );
+  });
+
+  it('permite administrar perfiles con ACCESO_TOTAL sobre admin_roles', async () => {
+    const tx = baseTx();
+    tx.tenant_users.findFirst.mockResolvedValue({
+      id_user: 9n,
+      role: 'MEMBER',
+      id_profile: 30n,
+    });
+    tx.tenant_profile_modules.findUnique.mockResolvedValue({
+      access_level: 'ACCESO_TOTAL',
+    });
+    tx.tenant_profiles.findMany.mockResolvedValue([]);
+    runWithTx(tx);
+
+    await expect(service.findAll(2n, 9n)).resolves.toEqual([]);
+    expect(tx.tenant_profile_modules.findUnique).toHaveBeenCalledWith({
+      where: {
+        id_tenant_id_profile_module_code: {
+          id_tenant: 2n,
+          id_profile: 30n,
+          module_code: 'admin_roles',
+        },
+      },
+      select: { access_level: true },
+    });
   });
 
   it('traduce P2025 en updates', async () => {

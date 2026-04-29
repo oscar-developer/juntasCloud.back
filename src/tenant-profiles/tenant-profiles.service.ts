@@ -8,6 +8,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTenantProfileDto } from './dto/create-tenant-profile.dto';
+import { QueryTenantProfilesDto } from './dto/query-tenant-profiles.dto';
 import {
   ACCESS_LEVELS,
   TenantProfileModuleConfigDto,
@@ -22,6 +23,7 @@ type TenantProfileRecord = {
   nombre: string;
   descripcion: string | null;
   activo: boolean;
+  tenant_profile_modules?: { access_level: string }[];
 };
 
 type TenantProfileModuleRecord = {
@@ -38,6 +40,11 @@ type TenantProfileModuleRecord = {
   };
 };
 
+type NormalizedModuleConfig = {
+  moduleCode: string;
+  accessLevel: (typeof ACCESS_LEVELS)[number];
+};
+
 @Injectable()
 export class TenantProfilesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -49,9 +56,11 @@ export class TenantProfilesService {
   ): Promise<TenantProfileResponseDto> {
     const nombre = this.normalizeRequiredText(dto.nombre, 'nombre');
     const descripcion = this.normalizeOptionalText(dto.descripcion, 'descripcion');
+    const modules = this.normalizeModules(dto.modules ?? []);
 
     return this.withTenantAdminContext(userId, tenantId, async (tx) => {
       await this.ensureProfileNameIsAvailable(tx, tenantId, nombre);
+      await this.ensureModulesExist(tx, modules.map((module) => module.moduleCode));
 
       try {
         const profile = await tx.tenant_profiles.create({
@@ -63,7 +72,20 @@ export class TenantProfilesService {
           },
         });
 
-        return this.toProfileResponse(profile);
+        if (modules.length > 0) {
+          await tx.tenant_profile_modules.createMany({
+            data: modules.map((module) => ({
+              id_tenant: tenantId,
+              id_profile: profile.id_profile,
+              module_code: module.moduleCode,
+              access_level: module.accessLevel,
+            })),
+          });
+        }
+
+        const savedModules = await this.findProfileModules(tx, tenantId, profile.id_profile);
+
+        return this.toProfileResponse(profile, savedModules, savedModules);
       } catch (error) {
         this.handleKnownErrors(error);
         throw error;
@@ -74,14 +96,38 @@ export class TenantProfilesService {
   async findAll(
     tenantId: bigint,
     userId: bigint,
+    query: QueryTenantProfilesDto = {},
   ): Promise<TenantProfileResponseDto[]> {
     return this.withTenantAdminContext(userId, tenantId, async (tx) => {
+      const search = this.normalizeSearch(query.search);
+      const page = query.page ?? 1;
+      const limit = query.limit ?? 20;
+      const where: Prisma.tenant_profilesWhereInput = {
+        id_tenant: tenantId,
+        activo: query.activo,
+        OR: search
+          ? [
+              { nombre: { contains: search, mode: 'insensitive' } },
+              { descripcion: { contains: search, mode: 'insensitive' } },
+            ]
+          : undefined,
+      };
+
       const profiles = await tx.tenant_profiles.findMany({
-        where: { id_tenant: tenantId },
+        where,
+        include: {
+          tenant_profile_modules: {
+            select: { access_level: true },
+          },
+        },
         orderBy: { id_profile: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
       });
 
-      return profiles.map((profile) => this.toProfileResponse(profile));
+      return profiles.map((profile) =>
+        this.toProfileResponse(profile, profile.tenant_profile_modules),
+      );
     });
   }
 
@@ -92,7 +138,8 @@ export class TenantProfilesService {
   ): Promise<TenantProfileResponseDto> {
     return this.withTenantAdminContext(userId, tenantId, async (tx) => {
       const profile = await this.getProfileOrThrow(tx, tenantId, profileId);
-      return this.toProfileResponse(profile);
+      const modules = await this.findProfileModules(tx, tenantId, profileId);
+      return this.toProfileResponse(profile, modules, modules);
     });
   }
 
@@ -209,13 +256,7 @@ export class TenantProfilesService {
     profileId: bigint,
     dto: TenantProfileModuleConfigDto[],
   ): Promise<TenantProfileModuleResponseDto[]> {
-    const modules = dto.map((module) => ({
-      moduleCode: this.normalizeRequiredText(module.moduleCode, 'moduleCode'),
-      accessLevel: module.accessLevel,
-    }));
-
-    this.ensureUniqueModuleCodes(modules);
-    this.ensureAccessLevelsAreValid(modules);
+    const modules = this.normalizeModules(dto);
 
     return this.withTenantAdminContext(userId, tenantId, async (tx) => {
       await this.getProfileOrThrow(tx, tenantId, profileId);
@@ -240,14 +281,7 @@ export class TenantProfilesService {
           });
         }
 
-        const savedModules = await tx.tenant_profile_modules.findMany({
-          where: {
-            id_tenant: tenantId,
-            id_profile: profileId,
-          },
-          include: { app_modules: true },
-          orderBy: [{ app_modules: { orden: 'asc' } }, { module_code: 'asc' }],
-        });
+        const savedModules = await this.findProfileModules(tx, tenantId, profileId);
 
         return savedModules.map((module) => this.toModuleResponse(module));
       } catch (error) {
@@ -338,6 +372,7 @@ export class TenantProfilesService {
         select: {
           id_user: true,
           role: true,
+          id_profile: true,
         },
       });
 
@@ -345,7 +380,11 @@ export class TenantProfilesService {
         throw new ForbiddenException('El usuario no pertenece al tenant activo.');
       }
 
-      if (membership.role !== 'OWNER' && membership.role !== 'ADMIN') {
+      if (
+        membership.role !== 'OWNER' &&
+        membership.role !== 'ADMIN' &&
+        !(await this.hasFullAccessToAdminRoles(tx, tenantId, membership.id_profile))
+      ) {
         throw new ForbiddenException('No tiene permisos suficientes para esta operacion.');
       }
 
@@ -374,6 +413,44 @@ export class TenantProfilesService {
     return profile;
   }
 
+  private async findProfileModules(
+    tx: Prisma.TransactionClient,
+    tenantId: bigint,
+    profileId: bigint,
+  ): Promise<TenantProfileModuleRecord[]> {
+    return tx.tenant_profile_modules.findMany({
+      where: {
+        id_tenant: tenantId,
+        id_profile: profileId,
+      },
+      include: { app_modules: true },
+      orderBy: [{ app_modules: { orden: 'asc' } }, { module_code: 'asc' }],
+    });
+  }
+
+  private async hasFullAccessToAdminRoles(
+    tx: Prisma.TransactionClient,
+    tenantId: bigint,
+    profileId: bigint | null,
+  ): Promise<boolean> {
+    if (!profileId) {
+      return false;
+    }
+
+    const permission = await tx.tenant_profile_modules.findUnique({
+      where: {
+        id_tenant_id_profile_module_code: {
+          id_tenant: tenantId,
+          id_profile: profileId,
+          module_code: 'admin_roles',
+        },
+      },
+      select: { access_level: true },
+    });
+
+    return permission?.access_level === 'ACCESO_TOTAL';
+  }
+
   private async ensureProfileNameIsAvailable(
     tx: Prisma.TransactionClient,
     tenantId: bigint,
@@ -398,6 +475,10 @@ export class TenantProfilesService {
     tx: Prisma.TransactionClient,
     moduleCodes: string[],
   ): Promise<void> {
+    if (moduleCodes.length === 0) {
+      return;
+    }
+
     const existingModules = await tx.app_modules.findMany({
       where: {
         module_code: { in: moduleCodes },
@@ -446,6 +527,29 @@ export class TenantProfilesService {
     }
   }
 
+  private normalizeModules(
+    modules: TenantProfileModuleConfigDto[],
+  ): NormalizedModuleConfig[] {
+    const normalized = modules.map((module) => ({
+      moduleCode: this.normalizeRequiredText(module.moduleCode, 'moduleCode'),
+      accessLevel: module.accessLevel,
+    }));
+
+    this.ensureUniqueModuleCodes(normalized);
+    this.ensureAccessLevelsAreValid(normalized);
+
+    return normalized;
+  }
+
+  private normalizeSearch(value: string | undefined): string | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    const normalized = value.trim();
+    return normalized || undefined;
+  }
+
   private normalizeRequiredText(value: string, field: string): string {
     if (typeof value !== 'string') {
       throw new BadRequestException(`${field} es obligatorio.`);
@@ -486,13 +590,26 @@ export class TenantProfilesService {
     }
   }
 
-  private toProfileResponse(profile: TenantProfileRecord): TenantProfileResponseDto {
+  private toProfileResponse(
+    profile: TenantProfileRecord,
+    countModules: { access_level: string }[] = profile.tenant_profile_modules ?? [],
+    modules?: TenantProfileModuleRecord[],
+  ): TenantProfileResponseDto {
     return {
       idTenant: Number(profile.id_tenant),
       idProfile: Number(profile.id_profile),
       nombre: profile.nombre,
       descripcion: profile.descripcion,
       activo: profile.activo,
+      createdAt: null,
+      updatedAt: null,
+      totalModules: countModules.length,
+      totalAccess: countModules.filter((module) => module.access_level === 'ACCESO_TOTAL').length,
+      totalReadOnly: countModules.filter((module) => module.access_level === 'SOLO_LECTURA')
+        .length,
+      totalNoAccess: countModules.filter((module) => module.access_level === 'SIN_ACCESO')
+        .length,
+      modules: modules?.map((module) => this.toModuleResponse(module)),
     };
   }
 
@@ -503,7 +620,7 @@ export class TenantProfilesService {
       idTenant: Number(module.id_tenant),
       idProfile: Number(module.id_profile),
       moduleCode: module.module_code,
-      moduleName: module.app_modules.nombre,
+      nombre: module.app_modules.nombre,
       grupo: module.app_modules.grupo,
       orden: module.app_modules.orden,
       activo: module.app_modules.activo,

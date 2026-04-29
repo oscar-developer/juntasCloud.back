@@ -30,6 +30,7 @@ import { DashboardModule } from './reportes/dashboard/dashboard.module';
 import { DeudasPersonaModule } from './reportes/deudas-persona/deudas-persona.module';
 import { TopModule } from './reportes/top/top.module';
 import { TenantProfilesModule } from './tenant-profiles/tenant-profiles.module';
+import { TenantUsersModule } from './tenant-users/tenant-users.module';
 
 @Module({  
   imports: [
@@ -62,6 +63,7 @@ import { TenantProfilesModule } from './tenant-profiles/tenant-profiles.module';
     DeudasPersonaModule,
     TopModule,
     TenantProfilesModule,
+    TenantUsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,4 +1,10 @@
 /*
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = 'juntascloudv3'
+  AND pid <> pg_backend_pid();
+
+DROP DATABASE IF EXISTS juntascloudv3;
 CREATE DATABASE juntascloudv3;
  */
 -- =========================================================

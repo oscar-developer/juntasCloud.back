@@ -1,0 +1,39 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+
+export class CreateTenantDto {
+  @ApiProperty({ example: 'Junta Directiva Los Alamos', maxLength: 150 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(150)
+  nombre!: string;
+
+  @ApiPropertyOptional({ type: String, example: 'RUC', maxLength: 15, nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(15)
+  tipoDocumento?: string | null;
+
+  @ApiPropertyOptional({ type: String, example: '20123456789', maxLength: 20, nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  numeroDocumento?: string | null;
+
+  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO'], default: 'ACTIVO' })
+  @IsOptional()
+  @IsIn(['ACTIVO', 'INACTIVO'])
+  estado?: 'ACTIVO' | 'INACTIVO';
+
+  @ApiPropertyOptional({ example: 'Tenant creado desde API', maxLength: 300 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  observaciones?: string | null;
+}

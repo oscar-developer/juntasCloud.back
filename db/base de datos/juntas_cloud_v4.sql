@@ -1405,10 +1405,14 @@ GRANT SELECT ON public.tenants TO juntas_rls_definer;
 GRANT SELECT ON public.tenant_users TO juntas_rls_definer;
 GRANT SELECT ON public.tenant_profiles TO juntas_rls_definer;
 GRANT SELECT ON public.tenant_invitations TO juntas_rls_definer;
+GRANT SELECT ON public.conceptos_cobro_base TO juntas_rls_definer;
+GRANT SELECT ON public.caja_categorias_base TO juntas_rls_definer;
 
 GRANT INSERT, UPDATE, DELETE ON public.tenants TO juntas_rls_definer;
 GRANT INSERT, UPDATE, DELETE ON public.tenant_users TO juntas_rls_definer;
 GRANT INSERT, UPDATE ON public.tenant_invitations TO juntas_rls_definer;
+GRANT INSERT ON public.conceptos_cobro TO juntas_rls_definer;
+GRANT INSERT ON public.caja_categorias TO juntas_rls_definer;
 GRANT UPDATE ON public.tenant_profiles TO juntas_rls_definer;
 GRANT DELETE ON public.tenant_invitations TO juntas_rls_definer;
 GRANT DELETE ON public.tenant_profiles TO juntas_rls_definer;
@@ -2532,6 +2536,42 @@ BEGIN
     now(),
     NULL
   );
+
+  INSERT INTO public.conceptos_cobro (
+    id_tenant,
+    cod_concepto_cobro,
+    nombre,
+    tipo,
+    activo,
+    requiere_periodo,
+    observaciones
+  )
+  SELECT
+    v_tenant_id,
+    ccb.cod_concepto_cobro,
+    ccb.nombre,
+    ccb.tipo,
+    ccb.activo,
+    ccb.requiere_periodo,
+    ccb.observaciones
+  FROM public.conceptos_cobro_base ccb
+  ON CONFLICT (id_tenant, cod_concepto_cobro) DO NOTHING;
+
+  INSERT INTO public.caja_categorias (
+    id_tenant,
+    cod_categoria,
+    nombre,
+    tipo,
+    activo
+  )
+  SELECT
+    v_tenant_id,
+    ccb.cod_categoria,
+    ccb.nombre,
+    ccb.tipo,
+    ccb.activo
+  FROM public.caja_categorias_base ccb
+  ON CONFLICT (id_tenant, cod_categoria) DO NOTHING;
 
   RETURN v_tenant_id;
 END;

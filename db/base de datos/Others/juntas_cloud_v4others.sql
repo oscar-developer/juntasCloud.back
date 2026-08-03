@@ -3477,6 +3477,100 @@ REVOKE ALL ON FUNCTION public.transfer_tenant_ownership(BIGINT, BIGINT)
 
 
 -- =============================================================================
+-- 13. PERMISOS PARA EL ROL DE LA APLICACIÓN
+-- =============================================================================
+--
+-- juntas_backend es el rol SQL de la aplicación. No debe tener BYPASSRLS.
+-- Las operaciones tenant-scoped deben ejecutarse dentro de una transacción que
+-- setee app.user_id y app.tenant_id con set_config(..., true).
+
+GRANT SELECT ON public.app_modules TO juntas_backend;
+GRANT SELECT ON public.caja_categorias_base TO juntas_backend;
+GRANT SELECT ON public.conceptos_cobro_base TO juntas_backend;
+
+GRANT SELECT, INSERT, UPDATE ON public.auth_users TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.auth_user_tokens TO juntas_backend;
+GRANT INSERT ON public.auth_login_logs TO juntas_backend;
+
+GRANT SELECT, UPDATE ON public.tenants TO juntas_backend;
+GRANT SELECT ON public.tenant_users TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.tenant_profiles TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.tenant_profile_modules TO juntas_backend;
+
+GRANT SELECT, INSERT, UPDATE ON public.personas TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.terrenos TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.bienes TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.persona_terreno TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.juntas_directivas TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.junta_miembros TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.asambleas TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.asistencia_asamblea TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.faenas TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.faena_participacion TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.caja_categorias TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.caja_movimientos TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.conceptos_cobro TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.obligaciones_persona TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.creditos_persona TO juntas_backend;
+GRANT SELECT, INSERT, UPDATE ON public.documentos TO juntas_backend;
+
+GRANT SELECT, INSERT, UPDATE ON public.persona_condiciones TO juntas_backend;
+GRANT SELECT, INSERT ON public.obligacion_pagos TO juntas_backend;
+GRANT SELECT, INSERT ON public.obligacion_movimientos TO juntas_backend;
+GRANT SELECT, INSERT ON public.credito_movimientos TO juntas_backend;
+GRANT SELECT ON public.audit_log TO juntas_backend;
+
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO juntas_backend;
+
+GRANT EXECUTE ON FUNCTION public.app_current_user_id()
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.app_current_tenant_id()
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.is_active_tenant_member(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.has_tenant_role(BIGINT, TEXT[])
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.can_access_active_tenant(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.can_admin_active_tenant(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.can_owner_manage_deleted_tenant(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.is_current_user_verified_email(CITEXT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.create_tenant(VARCHAR, VARCHAR, VARCHAR, VARCHAR)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.enviar_tenant_a_papelera(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.restaurar_tenant(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.eliminar_tenant_definitivamente(BIGINT, VARCHAR)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.create_tenant_invitation(
+  BIGINT, CITEXT, VARCHAR, BIGINT, INTEGER, VARCHAR
+) TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.accept_tenant_invitation(TEXT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.reject_tenant_invitation(TEXT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.revoke_tenant_invitation(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.list_tenant_invitations(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.list_received_tenant_invitations()
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.update_tenant_member(
+  BIGINT, BIGINT, VARCHAR, BIGINT
+) TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.deactivate_tenant_member(BIGINT, BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.leave_tenant(BIGINT)
+  TO juntas_backend;
+GRANT EXECUTE ON FUNCTION public.transfer_tenant_ownership(BIGINT, BIGINT)
+  TO juntas_backend;
+
+
+-- =============================================================================
 -- 14. EJEMPLOS DE USO
 -- =============================================================================
 -- crear un usuario

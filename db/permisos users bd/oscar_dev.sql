@@ -1,42 +1,28 @@
 -- =============================================================================
--- PERMISOS DE JUNTAS_BACKEND
+-- PERMISOS DE OSCAR_DEV
 -- Ejecutar como juntas_master dentro de juntascloudv4
 -- =============================================================================
 
 GRANT CONNECT
 ON DATABASE juntascloudv4
-TO juntas_backend;
+TO oscar_dev;
 
 GRANT USAGE
 ON SCHEMA public
-TO juntas_backend;
+TO oscar_dev;
 
 -- Objetos existentes.
 GRANT SELECT, INSERT, UPDATE, DELETE
 ON ALL TABLES IN SCHEMA public
-TO juntas_backend;
+TO oscar_dev;
 
 GRANT USAGE, SELECT
 ON ALL SEQUENCES IN SCHEMA public
-TO juntas_backend;
+TO oscar_dev;
 
 GRANT EXECUTE
 ON ALL FUNCTIONS IN SCHEMA public
-TO juntas_backend;
-
--- Tablas sensibles: se modifican mediante funciones controladas.
-REVOKE INSERT, UPDATE, DELETE
-ON public.tenants,
-   public.tenant_users,
-   public.tenant_invitations
-FROM juntas_backend;
-
--- Catálogos globales de solo lectura.
-REVOKE INSERT, UPDATE, DELETE
-ON public.app_modules,
-   public.caja_categorias_base,
-   public.conceptos_cobro_base
-FROM juntas_backend;
+TO oscar_dev;
 
 -- Objetos futuros creados por juntas_master.
 ALTER DEFAULT PRIVILEGES
@@ -44,18 +30,18 @@ FOR ROLE juntas_master
 IN SCHEMA public
 GRANT SELECT, INSERT, UPDATE, DELETE
 ON TABLES
-TO juntas_backend;
+TO oscar_dev;
 
 ALTER DEFAULT PRIVILEGES
 FOR ROLE juntas_master
 IN SCHEMA public
 GRANT USAGE, SELECT
 ON SEQUENCES
-TO juntas_backend;
+TO oscar_dev;
 
 ALTER DEFAULT PRIVILEGES
 FOR ROLE juntas_master
 IN SCHEMA public
 GRANT EXECUTE
 ON FUNCTIONS
-TO juntas_backend;
+TO oscar_dev;

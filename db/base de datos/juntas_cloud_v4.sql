@@ -16,7 +16,7 @@ Objetivo:
   - Las operaciones sensibles se ejecutan mediante funciones SECURITY DEFINER.
 
 IMPORTANTE:
-  1. Este script debe ejecutarse con un usuario administrador de la base de datos.
+  1. Este script debe ejecutarse conectado como juntas_master.
   2. El backend debe establecer el usuario autenticado al iniciar cada transacción:
 
        SELECT set_config('app.user_id', '123', true);
@@ -24,8 +24,6 @@ IMPORTANTE:
      El tercer parámetro TRUE limita el valor a la transacción actual.
   3. No se debe permitir que el cliente establezca libremente app.user_id.
      Esta responsabilidad corresponde exclusivamente al backend.
-  4. Al final del script se incluyen GRANT de ejemplo. Reemplazar
-     app_authenticated por el rol real utilizado por la aplicación.
 ===============================================================================
 DROP DATABASE IF EXISTS juntascloudv4;
 CREATE DATABASE juntascloudv4;
@@ -51,16 +49,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'juntas_migrator') THEN
-    CREATE ROLE juntas_migrator NOLOGIN;
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'juntas_backend') THEN
-    CREATE ROLE juntas_backend NOLOGIN;
-  END IF;
-
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'juntas_rls_definer') THEN
     CREATE ROLE juntas_rls_definer NOLOGIN BYPASSRLS;
+  ELSE
+    ALTER ROLE juntas_rls_definer NOLOGIN BYPASSRLS;
   END IF;
 END;
 $$;
@@ -92,10 +84,12 @@ AS $$
   SELECT NULLIF(current_setting('app.user_id', true), '')::BIGINT;
 $$;
 
-ALTER FUNCTION public.app_current_user_id()
-  OWNER TO juntas_migrator;
-
 REVOKE ALL ON FUNCTION public.app_current_user_id() FROM PUBLIC;
+
+-- Permitir que las funciones SECURITY DEFINER puedan invocarla.
+GRANT EXECUTE
+ON FUNCTION public.app_current_user_id()
+TO juntas_rls_definer;
 
 
 -- Recupera el tenant establecido por el backend en la transacción actual.
@@ -108,11 +102,12 @@ AS $$
   SELECT NULLIF(current_setting('app.tenant_id', true), '')::BIGINT;
 $$;
 
-ALTER FUNCTION public.app_current_tenant_id()
-  OWNER TO juntas_migrator;
-
 REVOKE ALL ON FUNCTION public.app_current_tenant_id() FROM PUBLIC;
 
+-- Permitir que las funciones SECURITY DEFINER puedan invocarla.
+GRANT EXECUTE
+ON FUNCTION public.app_current_tenant_id()
+TO juntas_rls_definer;
 
 -- =============================================================================
 -- 3. MÓDULOS GLOBALES
@@ -1396,8 +1391,6 @@ CREATE TABLE public.conceptos_cobro_base (
 -- 9. PRIVILEGIOS DEL ROL INTERNO
 -- =============================================================================
 
-GRANT USAGE ON SCHEMA public TO juntas_migrator;
-GRANT USAGE ON SCHEMA public TO juntas_backend;
 GRANT USAGE ON SCHEMA public TO juntas_rls_definer;
 
 GRANT SELECT ON public.auth_users TO juntas_rls_definer;
@@ -1627,9 +1620,6 @@ BEGIN
 END;
 $$;
 
-ALTER FUNCTION public.set_created_by_user()
-  OWNER TO juntas_migrator;
-
 REVOKE ALL ON FUNCTION public.set_created_by_user() FROM PUBLIC;
 
 
@@ -1653,9 +1643,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-ALTER FUNCTION public.set_updated_by_user()
-  OWNER TO juntas_migrator;
 
 REVOKE ALL ON FUNCTION public.set_updated_by_user() FROM PUBLIC;
 
@@ -3536,7 +3523,7 @@ VALUES (
         crypt('123!', gen_salt('bf', 12)),
         true,
         now()
-)
+);
 */
 
 /*

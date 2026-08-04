@@ -1401,34 +1401,35 @@ GRANT SELECT ON public.tenant_invitations TO juntas_rls_definer;
 GRANT SELECT ON public.conceptos_cobro_base TO juntas_rls_definer;
 GRANT SELECT ON public.caja_categorias_base TO juntas_rls_definer;
 
-GRANT INSERT, UPDATE, DELETE ON public.tenants TO juntas_rls_definer;
-GRANT INSERT, UPDATE, DELETE ON public.tenant_users TO juntas_rls_definer;
-GRANT INSERT, UPDATE ON public.tenant_invitations TO juntas_rls_definer;
-GRANT INSERT ON public.conceptos_cobro TO juntas_rls_definer;
-GRANT INSERT ON public.caja_categorias TO juntas_rls_definer;
-GRANT UPDATE ON public.tenant_profiles TO juntas_rls_definer;
-GRANT DELETE ON public.tenant_invitations TO juntas_rls_definer;
-GRANT DELETE ON public.tenant_profiles TO juntas_rls_definer;
-GRANT DELETE ON public.documentos TO juntas_rls_definer;
-GRANT DELETE ON public.credito_movimientos TO juntas_rls_definer;
-GRANT DELETE ON public.creditos_persona TO juntas_rls_definer;
-GRANT DELETE ON public.obligacion_pagos TO juntas_rls_definer;
-GRANT DELETE ON public.obligacion_movimientos TO juntas_rls_definer;
-GRANT DELETE ON public.obligaciones_persona TO juntas_rls_definer;
-GRANT DELETE ON public.conceptos_cobro TO juntas_rls_definer;
-GRANT DELETE ON public.caja_movimientos TO juntas_rls_definer;
-GRANT DELETE ON public.caja_categorias TO juntas_rls_definer;
-GRANT DELETE ON public.faena_participacion TO juntas_rls_definer;
-GRANT DELETE ON public.asistencia_asamblea TO juntas_rls_definer;
-GRANT DELETE ON public.junta_miembros TO juntas_rls_definer;
-GRANT DELETE ON public.persona_terreno TO juntas_rls_definer;
-GRANT DELETE ON public.persona_condiciones TO juntas_rls_definer;
-GRANT DELETE ON public.faenas TO juntas_rls_definer;
-GRANT DELETE ON public.asambleas TO juntas_rls_definer;
-GRANT DELETE ON public.juntas_directivas TO juntas_rls_definer;
-GRANT DELETE ON public.terrenos TO juntas_rls_definer;
-GRANT DELETE ON public.bienes TO juntas_rls_definer;
-GRANT DELETE ON public.personas TO juntas_rls_definer;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tenants TO juntas_rls_definer;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tenant_users TO juntas_rls_definer;
+GRANT SELECT, INSERT, UPDATE ON public.tenant_invitations TO juntas_rls_definer;
+GRANT SELECT, INSERT ON public.conceptos_cobro TO juntas_rls_definer;
+
+GRANT SELECT, INSERT ON public.caja_categorias TO juntas_rls_definer;
+GRANT SELECT, UPDATE ON public.tenant_profiles TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.tenant_invitations TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.tenant_profiles TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.documentos TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.credito_movimientos TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.creditos_persona TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.obligacion_pagos TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.obligacion_movimientos TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.obligaciones_persona TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.conceptos_cobro TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.caja_movimientos TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.caja_categorias TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.faena_participacion TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.asistencia_asamblea TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.junta_miembros TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.persona_terreno TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.persona_condiciones TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.faenas TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.asambleas TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.juntas_directivas TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.terrenos TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.bienes TO juntas_rls_definer;
+GRANT SELECT, DELETE ON public.personas TO juntas_rls_definer;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public
   TO juntas_rls_definer;
 
@@ -2666,7 +2667,6 @@ FROM PUBLIC;
 -- =============================================================================
 -- ELIMINAR TENANT DEFINITIVAMENTE
 -- =============================================================================
-
 CREATE OR REPLACE FUNCTION public.eliminar_tenant_definitivamente(
   p_tenant_id BIGINT,
   p_confirmacion VARCHAR
@@ -2676,20 +2676,42 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
+DECLARE
+  v_user_id BIGINT;
 BEGIN
-  IF public.app_current_user_id() IS NULL THEN
+  v_user_id := public.app_current_user_id();
+
+  IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Usuario no autenticado';
   END IF;
 
-  IF p_confirmacion <> 'ELIMINAR DEFINITIVAMENTE' THEN
+  IF p_tenant_id IS NULL THEN
+    RAISE EXCEPTION 'El identificador del tenant es obligatorio';
+  END IF;
+
+  IF p_confirmacion IS DISTINCT FROM 'ELIMINAR DEFINITIVAMENTE' THEN
     RAISE EXCEPTION 'La confirmación no es válida';
   END IF;
 
-  IF NOT public.can_owner_manage_deleted_tenant(p_tenant_id) THEN
-    RAISE EXCEPTION
-      'Solamente el OWNER puede eliminar el tenant';
+  -- Verificar primero que el tenant exista.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.tenants t
+    WHERE t.id_tenant = p_tenant_id
+  ) THEN
+    RAISE EXCEPTION 'El tenant indicado no existe';
   END IF;
 
+  -- Verificar independientemente que el usuario autenticado sea OWNER.
+  IF NOT public.has_tenant_role(
+    p_tenant_id,
+    ARRAY['OWNER']::TEXT[]
+  ) THEN
+    RAISE EXCEPTION
+      'Solamente el OWNER puede eliminar definitivamente el tenant';
+  END IF;
+
+  -- Verificar independientemente que el tenant esté en papelera.
   IF NOT EXISTS (
     SELECT 1
     FROM public.tenants t
@@ -2698,16 +2720,13 @@ BEGIN
       AND t.deleted_at IS NOT NULL
   ) THEN
     RAISE EXCEPTION
-      'El tenant debe estar en la papelera antes de eliminarse';
+      'El tenant debe estar en la papelera antes de eliminarse definitivamente';
   END IF;
 
   DELETE FROM public.documentos
   WHERE id_tenant = p_tenant_id;
 
   DELETE FROM public.tenant_invitations
-  WHERE id_tenant = p_tenant_id;
-
-  DELETE FROM public.tenant_users
   WHERE id_tenant = p_tenant_id;
 
   DELETE FROM public.credito_movimientos
@@ -2770,8 +2789,19 @@ BEGIN
   DELETE FROM public.tenant_profiles
   WHERE id_tenant = p_tenant_id;
 
+  -- tenant_users debe eliminarse al final porque sirve para validar
+  -- que el usuario autenticado sea OWNER.
+  DELETE FROM public.tenant_users
+  WHERE id_tenant = p_tenant_id;
+
   DELETE FROM public.tenants
   WHERE id_tenant = p_tenant_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'No se pudo eliminar definitivamente el tenant %',
+      p_tenant_id;
+  END IF;
 END;
 $$;
 
@@ -2789,7 +2819,6 @@ FROM PUBLIC;
 -- Devuelve el token en texto plano una sola vez. La BD almacena únicamente su
 -- hash SHA-256. El backend debe enviar el token al destinatario y no registrarlo
 -- en logs.
-
 CREATE OR REPLACE FUNCTION public.create_tenant_invitation(
   p_tenant_id          BIGINT,
   p_email              CITEXT,
@@ -2806,55 +2835,80 @@ AS $$
 DECLARE
   v_user_id    BIGINT;
   v_email      CITEXT;
+  v_role       VARCHAR(15);
+  v_message    VARCHAR(500);
   v_token      TEXT;
   v_token_hash TEXT;
 BEGIN
   v_user_id := public.app_current_user_id();
   v_email := NULLIF(btrim(p_email::TEXT), '')::CITEXT;
+  v_role := upper(NULLIF(btrim(p_role), ''));
+  v_message := NULLIF(btrim(p_message), '');
 
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Usuario no autenticado';
   END IF;
 
+  IF p_tenant_id IS NULL THEN
+    RAISE EXCEPTION 'El identificador del tenant es obligatorio';
+  END IF;
+
   IF NOT public.can_admin_active_tenant(p_tenant_id) THEN
-    RAISE EXCEPTION 'No tiene permiso para invitar usuarios a este tenant';
+    RAISE EXCEPTION
+      'No tiene permiso para invitar usuarios a este tenant';
   END IF;
 
   IF v_email IS NULL THEN
     RAISE EXCEPTION 'El correo de invitación es obligatorio';
   END IF;
 
-  IF p_role NOT IN ('ADMIN', 'MEMBER') THEN
-    RAISE EXCEPTION 'El rol de la invitación debe ser ADMIN o MEMBER';
+  IF v_role IS NULL OR v_role NOT IN ('ADMIN', 'MEMBER') THEN
+    RAISE EXCEPTION
+      'El rol de la invitación debe ser ADMIN o MEMBER';
   END IF;
 
-  IF p_expires_in_days < 1 OR p_expires_in_days > 30 THEN
-    RAISE EXCEPTION 'La vigencia debe estar entre 1 y 30 días';
+  IF p_expires_in_days IS NULL
+     OR p_expires_in_days < 1
+     OR p_expires_in_days > 30 THEN
+    RAISE EXCEPTION
+      'La vigencia debe estar entre 1 y 30 días';
   END IF;
 
-  IF p_id_profile IS NOT NULL AND NOT EXISTS (
-    SELECT 1
-    FROM public.tenant_profiles tp
-    WHERE tp.id_tenant = p_tenant_id
-      AND tp.id_profile = p_id_profile
-      AND tp.estado = TRUE
-  ) THEN
-    RAISE EXCEPTION 'El perfil no existe, está inactivo o pertenece a otro tenant';
+  IF p_id_profile IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+       FROM public.tenant_profiles tp
+       WHERE tp.id_tenant = p_tenant_id
+         AND tp.id_profile = p_id_profile
+         AND tp.estado = TRUE
+     ) THEN
+    RAISE EXCEPTION
+      'El perfil no existe, está inactivo o pertenece a otro tenant';
   END IF;
 
   IF EXISTS (
     SELECT 1
     FROM public.tenant_users tu
-    JOIN public.auth_users au ON au.id_user = tu.id_user
+    JOIN public.auth_users au
+      ON au.id_user = tu.id_user
     WHERE tu.id_tenant = p_tenant_id
       AND tu.estado = 'ACTIVO'
       AND au.email = v_email
   ) THEN
-    RAISE EXCEPTION 'El usuario ya es miembro activo del tenant';
+    RAISE EXCEPTION
+      'El usuario ya es miembro activo del tenant';
   END IF;
 
+  /*
+   * El token original se devuelve una sola vez.
+   * En la tabla únicamente se almacena su hash SHA-256.
+   */
   v_token := encode(gen_random_bytes(32), 'hex');
-  v_token_hash := encode(digest(v_token, 'sha256'), 'hex');
+
+  v_token_hash := encode(
+    digest(v_token, 'sha256'),
+    'hex'
+  );
 
   INSERT INTO public.tenant_invitations (
     id_tenant,
@@ -2864,33 +2918,64 @@ BEGIN
     token_hash,
     status,
     expires_at,
+    accepted_at,
+    rejected_at,
+    revoked_at,
     invited_by,
     message
   )
   VALUES (
     p_tenant_id,
     v_email,
-    p_role,
+    v_role,
     p_id_profile,
     v_token_hash,
     'PENDING',
     now() + make_interval(days => p_expires_in_days),
+    NULL,
+    NULL,
+    NULL,
     v_user_id,
-    NULLIF(btrim(p_message), '')
-  );
+    v_message
+  )
+  ON CONFLICT (id_tenant, email)
+  WHERE status = 'PENDING'
+  DO UPDATE
+  SET role = EXCLUDED.role,
+      id_profile = EXCLUDED.id_profile,
+      token_hash = EXCLUDED.token_hash,
+      expires_at = EXCLUDED.expires_at,
+      invited_by = EXCLUDED.invited_by,
+      message = EXCLUDED.message,
+      accepted_at = NULL,
+      rejected_at = NULL,
+      revoked_at = NULL,
+      updated_at = now();
 
   RETURN v_token;
 END;
 $$;
 
 ALTER FUNCTION public.create_tenant_invitation(
-  BIGINT, CITEXT, VARCHAR, BIGINT, INTEGER, VARCHAR
-) OWNER TO juntas_rls_definer;
+  BIGINT,
+  CITEXT,
+  VARCHAR,
+  BIGINT,
+  INTEGER,
+  VARCHAR
+)
+OWNER TO juntas_rls_definer;
 
-REVOKE ALL ON FUNCTION public.create_tenant_invitation(
-  BIGINT, CITEXT, VARCHAR, BIGINT, INTEGER, VARCHAR
-) FROM PUBLIC;
-
+REVOKE ALL
+ON FUNCTION public.create_tenant_invitation(
+  BIGINT,
+  CITEXT,
+  VARCHAR,
+  BIGINT,
+  INTEGER,
+  VARCHAR
+)
+FROM PUBLIC;
 
 -- -----------------------------------------------------------------------------
 -- 12.3. ACEPTAR INVITACIÓN

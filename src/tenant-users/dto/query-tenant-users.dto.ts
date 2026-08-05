@@ -2,7 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 
-export const TENANT_USER_ESTADOS = ['PENDIENTE', 'ACTIVO', 'INACTIVO', 'RECHAZADO'] as const;
+export const TENANT_USER_ESTADOS = ['ACTIVO', 'INACTIVO'] as const;
 export const TENANT_USER_ROLES = ['OWNER', 'ADMIN', 'MEMBER'] as const;
 
 export type TenantUserEstado = (typeof TENANT_USER_ESTADOS)[number];

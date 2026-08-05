@@ -13,7 +13,7 @@ export class TenantInvitationResponseDto {
   @ApiProperty({ enum: ['ADMIN', 'MEMBER'] })
   role!: string;
 
-  @ApiProperty({ enum: ['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED'] })
+  @ApiProperty({ enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'REVOKED', 'EXPIRED'] })
   status!: string;
 
   @ApiProperty({ example: '2026-03-02T12:00:00.000Z' })
@@ -24,6 +24,9 @@ export class TenantInvitationResponseDto {
 
   @ApiProperty({ nullable: true, example: '2026-03-01T12:00:00.000Z' })
   revokedAt!: Date | null;
+
+  @ApiProperty({ nullable: true, example: '2026-03-01T12:00:00.000Z' })
+  rejectedAt!: Date | null;
 
   @ApiProperty({ example: 1 })
   invitedBy!: number;

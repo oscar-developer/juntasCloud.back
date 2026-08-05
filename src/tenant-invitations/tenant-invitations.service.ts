@@ -6,33 +6,25 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { createHash, randomBytes } from 'crypto';
+import { createHash } from 'crypto';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTenantInvitationDto } from './dto/create-tenant-invitation.dto';
 import { TenantInvitationResponseDto } from './dto/tenant-invitation-response.dto';
-
-type TenantMembership = {
-  id_tenant: bigint;
-  id_user: bigint;
-  role: string;
-  estado: string;
-};
-
-type AuthUserIdentity = {
-  id_user: bigint;
-  email: string;
-};
 
 type InvitationRecord = {
   id_invitation: bigint;
   id_tenant: bigint;
   email: string;
   role: string;
+  id_profile: bigint | null;
   status: string;
   expires_at: Date;
   accepted_at: Date | null;
+  rejected_at: Date | null;
   revoked_at: Date | null;
   invited_by: bigint;
+  message: string | null;
   created_at: Date;
 };
 
@@ -41,11 +33,15 @@ export class TenantInvitationsService {
   private static readonly STATUS_PRIORITY: Record<string, number> = {
     PENDING: 0,
     ACCEPTED: 1,
-    REVOKED: 2,
-    EXPIRED: 3,
+    REJECTED: 2,
+    REVOKED: 3,
+    EXPIRED: 4,
   };
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   async create(
     tenantId: bigint,
@@ -53,57 +49,52 @@ export class TenantInvitationsService {
     dto: CreateTenantInvitationDto,
   ): Promise<TenantInvitationResponseDto> {
     const normalizedEmail = this.normalizeEmail(dto.email);
-    this.ensureInvitationRoleIsValid(dto.role);
+    const role = this.normalizeInvitationRole(dto.role);
+    const idProfile = this.normalizeOptionalNumberId(dto.idProfile, 'idProfile');
+    const expiresInDays = dto.expiresInDays ?? 7;
+    const message = this.normalizeOptionalText(dto.message, 'message');
+    let plainToken = '';
 
-    return this.withUserContext(userId, async (tx) => {
-      const membership = await this.getMembershipOrThrow(tx, tenantId, userId);
-      this.assertCanInvite(membership.role, dto.role);
-      const now = new Date();
+    try {
+      const invitation = await this.withTenantContext(userId, tenantId, async (tx) => {
+        const rows = await tx.$queryRaw<{ token: string }[]>(
+          Prisma.sql`
+            SELECT public.create_tenant_invitation(
+              ${tenantId},
+              ${normalizedEmail},
+              ${role},
+              ${idProfile},
+              ${expiresInDays},
+              ${message}
+            ) AS token
+          `,
+        );
+        plainToken = rows[0]?.token ?? '';
+        if (!plainToken) {
+          throw new BadRequestException('No se pudo crear la invitacion.');
+        }
 
-      await this.expirePendingInvitations(tx, tenantId, normalizedEmail, now);
-
-      const existing = await tx.tenant_invitations.findFirst({
-        where: {
-          id_tenant: tenantId,
-          email: normalizedEmail,
-          status: 'PENDING',
-          expires_at: { gt: now },
-        },
+        return this.getInvitationByTokenHashOrThrow(tx, this.hashToken(plainToken));
       });
 
-      if (existing) {
-        throw new ConflictException(
-          'Ya existe una invitacion activa para ese email en este tenant.',
-        );
-      }
-
-      const tokenHash = this.hashToken(randomBytes(32).toString('base64url'));
-
-      const invitation = await tx.tenant_invitations.create({
-        data: {
-          id_tenant: tenantId,
-          email: normalizedEmail,
-          role: dto.role,
-          token_hash: tokenHash,
-          status: 'PENDING',
-          expires_at: new Date(now.getTime() + 48 * 60 * 60 * 1000),
-          invited_by: userId,
-        },
+      await this.mailService.sendTenantInvitation({
+        email: invitation.email,
+        token: plainToken,
+        expiresInDays,
       });
 
       return this.toResponse(invitation);
-    });
+    } catch (error) {
+      this.handleKnownErrors(error);
+      this.handleFunctionErrors(error);
+      throw error;
+    }
   }
 
   async listMine(userId: bigint): Promise<TenantInvitationResponseDto[]> {
     return this.withUserContext(userId, async (tx) => {
-      const authUser = await this.getAuthUserOrThrow(tx, userId);
       const now = new Date();
-
       const invitations = await tx.tenant_invitations.findMany({
-        where: {
-          email: authUser.email,
-        },
         orderBy: { created_at: 'desc' },
       });
 
@@ -113,83 +104,55 @@ export class TenantInvitationsService {
   }
 
   async accept(
-    invitationId: bigint,
+    token: string,
     userId: bigint,
   ): Promise<TenantInvitationResponseDto> {
-    return this.withUserContext(userId, async (tx) => {
-      const authUser = await this.getAuthUserOrThrow(tx, userId);
-      const invitation = await this.getActiveInvitationOrThrow(tx, invitationId);
+    const normalizedToken = this.normalizeToken(token);
+    const tokenHash = this.hashToken(normalizedToken);
 
-      this.assertInvitationBelongsToUser(invitation.email, authUser.email);
-
-      const existingMembership = await tx.tenant_users.findFirst({
-        where: {
-          id_tenant: invitation.id_tenant,
-          id_user: userId,
-        },
+    try {
+      return await this.withUserContext(userId, async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT public.accept_tenant_invitation(${normalizedToken})`,
+        );
+        const invitation = await this.getInvitationByTokenHashOrThrow(tx, tokenHash);
+        return this.toResponse(invitation);
       });
-
-      if (existingMembership) {
-        throw new ConflictException('El usuario ya pertenece a este tenant.');
-      }
-
-      const now = new Date();
-
-      await tx.tenant_users.create({
-        data: {
-          id_tenant: invitation.id_tenant,
-          id_user: userId,
-          role: invitation.role,
-          estado: 'ACTIVO',
-          accepted_at: now,
-          invited_by: invitation.invited_by,
-        },
-      });
-
-      const updatedInvitation = await tx.tenant_invitations.update({
-        where: { id_invitation: invitationId },
-        data: {
-          status: 'ACCEPTED',
-          accepted_at: now,
-        },
-      });
-
-      return this.toResponse(updatedInvitation);
-    });
+    } catch (error) {
+      this.handleKnownErrors(error);
+      this.handleFunctionErrors(error);
+      throw error;
+    }
   }
 
   async reject(
-    invitationId: bigint,
+    token: string,
     userId: bigint,
   ): Promise<TenantInvitationResponseDto> {
-    return this.withUserContext(userId, async (tx) => {
-      const authUser = await this.getAuthUserOrThrow(tx, userId);
-      const invitation = await this.getActiveInvitationOrThrow(tx, invitationId);
+    const normalizedToken = this.normalizeToken(token);
+    const tokenHash = this.hashToken(normalizedToken);
 
-      this.assertInvitationBelongsToUser(invitation.email, authUser.email);
-      const now = new Date();
-
-      const updatedInvitation = await tx.tenant_invitations.update({
-        where: { id_invitation: invitationId },
-        data: {
-          status: 'REVOKED',
-          revoked_at: now,
-        },
+    try {
+      return await this.withUserContext(userId, async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT public.reject_tenant_invitation(${normalizedToken})`,
+        );
+        const invitation = await this.getInvitationByTokenHashOrThrow(tx, tokenHash);
+        return this.toResponse(invitation);
       });
-
-      return this.toResponse(updatedInvitation);
-    });
+    } catch (error) {
+      this.handleKnownErrors(error);
+      this.handleFunctionErrors(error);
+      throw error;
+    }
   }
 
   async listByTenant(
     tenantId: bigint,
     userId: bigint,
   ): Promise<TenantInvitationResponseDto[]> {
-    return this.withUserContext(userId, async (tx) => {
-      const membership = await this.getMembershipOrThrow(tx, tenantId, userId);
-      this.assertOwnerOrAdmin(membership.role);
+    return this.withTenantContext(userId, tenantId, async (tx) => {
       const now = new Date();
-
       const invitations = await tx.tenant_invitations.findMany({
         where: { id_tenant: tenantId },
         orderBy: { created_at: 'desc' },
@@ -203,7 +166,6 @@ export class TenantInvitationsService {
   async listSentMine(userId: bigint): Promise<TenantInvitationResponseDto[]> {
     return this.withUserContext(userId, async (tx) => {
       const now = new Date();
-
       const invitations = await tx.tenant_invitations.findMany({
         where: {
           invited_by: userId,
@@ -229,70 +191,36 @@ export class TenantInvitationsService {
     userId: bigint,
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    try {
-      return await this.prisma.$transaction(async (tx) => {
-        await tx.$executeRaw(
-          Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
-        );
-        return fn(tx);
-      });
-    } catch (error) {
-      this.handleKnownErrors(error);
-      throw error;
-    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
+      );
+      return fn(tx);
+    });
   }
 
-  private async getMembershipOrThrow(
-    tx: Prisma.TransactionClient,
+  private async withTenantContext<T>(
+    userId: bigint,
     tenantId: bigint,
-    userId: bigint,
-  ): Promise<TenantMembership> {
-    const membership = await tx.tenant_users.findFirst({
-      where: {
-        id_tenant: tenantId,
-        id_user: userId,
-        estado: 'ACTIVO',
-      },
-      select: {
-        id_tenant: true,
-        id_user: true,
-        role: true,
-        estado: true,
-      },
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
+      );
+      await tx.$executeRaw(
+        Prisma.sql`SELECT set_config('app.tenant_id', ${tenantId.toString()}, true)`,
+      );
+      return fn(tx);
     });
-
-    if (!membership) {
-      throw new ForbiddenException('El usuario no pertenece a este tenant.');
-    }
-
-    return membership;
   }
 
-  private async getAuthUserOrThrow(
+  private async getInvitationByTokenHashOrThrow(
     tx: Prisma.TransactionClient,
-    userId: bigint,
-  ): Promise<AuthUserIdentity> {
-    const authUser = await tx.auth_users.findUnique({
-      where: { id_user: userId },
-      select: {
-        id_user: true,
-        email: true,
-      },
-    });
-
-    if (!authUser) {
-      throw new NotFoundException('No se encontro el usuario autenticado.');
-    }
-
-    return authUser;
-  }
-
-  private async getInvitationOrThrow(
-    tx: Prisma.TransactionClient,
-    invitationId: bigint,
+    tokenHash: string,
   ): Promise<InvitationRecord> {
     const invitation = await tx.tenant_invitations.findUnique({
-      where: { id_invitation: invitationId },
+      where: { token_hash: tokenHash },
     });
 
     if (!invitation) {
@@ -302,76 +230,11 @@ export class TenantInvitationsService {
     return invitation;
   }
 
-  private async getActiveInvitationOrThrow(
-    tx: Prisma.TransactionClient,
-    invitationId: bigint,
-  ): Promise<InvitationRecord> {
-    const invitation = await this.getInvitationOrThrow(tx, invitationId);
-    const currentInvitation = await this.expirePendingInvitationIfNeeded(tx, invitation);
-
-    this.assertInvitationPending(currentInvitation.status);
-    this.assertInvitationNotExpired(currentInvitation.expires_at);
-
-    return currentInvitation;
-  }
-
-  private assertCanInvite(actorRole: string, invitedRole: string): void {
-    if (actorRole === 'OWNER') {
-      return;
-    }
-
-    if (actorRole === 'ADMIN' && invitedRole === 'MEMBER') {
-      return;
-    }
-
-    throw new ForbiddenException(
-      'No tiene permisos para crear esta invitacion.',
-    );
-  }
-
-  private assertOwnerOrAdmin(role: string): void {
-    if (role === 'OWNER' || role === 'ADMIN') {
-      return;
-    }
-
-    throw new ForbiddenException(
-      'No tiene permisos suficientes para esta operacion.',
-    );
-  }
-
-  private assertInvitationBelongsToUser(
-    invitationEmail: string,
-    authUserEmail: string,
-  ): void {
-    if (invitationEmail !== authUserEmail) {
-      throw new ForbiddenException(
-        'La invitacion no pertenece al usuario autenticado.',
-      );
-    }
-  }
-
-  private assertInvitationPending(status: string): void {
-    if (status === 'EXPIRED') {
-      throw new ConflictException('La invitacion ha expirado.');
-    }
-
-    if (status !== 'PENDING') {
-      throw new ConflictException(
-        'La invitacion ya fue procesada o no esta disponible.',
-      );
-    }
-  }
-
-  private assertInvitationNotExpired(expiresAt: Date): void {
-    if (expiresAt.getTime() <= Date.now()) {
-      throw new ConflictException('La invitacion ha expirado.');
-    }
-  }
-
-  private ensureInvitationRoleIsValid(role: string): void {
+  private normalizeInvitationRole(role: string): 'ADMIN' | 'MEMBER' {
     if (role !== 'ADMIN' && role !== 'MEMBER') {
       throw new BadRequestException('role solo admite ADMIN o MEMBER.');
     }
+    return role;
   }
 
   private normalizeEmail(email: string): string {
@@ -387,63 +250,45 @@ export class TenantInvitationsService {
     return normalized;
   }
 
-  private async expirePendingInvitations(
-    tx: Prisma.TransactionClient,
-    tenantId: bigint,
-    email: string,
-    now: Date,
-  ): Promise<void> {
-    await tx.tenant_invitations.updateMany({
-      where: {
-        id_tenant: tenantId,
-        email,
-        status: 'PENDING',
-        expires_at: { lte: now },
-      },
-      data: { status: 'EXPIRED' },
-    });
+  private normalizeToken(token: string): string {
+    if (typeof token !== 'string') {
+      throw new BadRequestException('token es obligatorio.');
+    }
+    const normalized = token.trim();
+    if (!normalized) {
+      throw new BadRequestException('token es obligatorio.');
+    }
+    return normalized;
   }
 
-  private async expirePendingInvitationIfNeeded(
-    tx: Prisma.TransactionClient,
-    invitation: InvitationRecord,
-  ): Promise<InvitationRecord> {
-    if (invitation.status !== 'PENDING') {
-      return invitation;
+  private normalizeOptionalNumberId(
+    value: number | null | undefined,
+    fieldName: string,
+  ): bigint | null {
+    if (value === undefined || value === null) {
+      return null;
     }
-
-    if (invitation.expires_at.getTime() > Date.now()) {
-      return invitation;
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new BadRequestException(`${fieldName} debe ser un entero positivo.`);
     }
-
-    await tx.tenant_invitations.update({
-      where: { id_invitation: invitation.id_invitation },
-      data: { status: 'EXPIRED' },
-    });
-
-    throw new ConflictException('La invitacion ha expirado.');
+    return BigInt(value);
   }
 
-  private hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
-  }
-
-  private handleKnownErrors(error: unknown): void {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        throw new ConflictException(
-          'Ya existe una invitacion pendiente para ese email en este tenant.',
-        );
-      }
-      if (error.code === 'P2003') {
-        throw new BadRequestException(
-          'La relacion referencial de la invitacion es invalida.',
-        );
-      }
-      if (error.code === 'P2025') {
-        throw new NotFoundException('No se encontro el registro solicitado.');
-      }
+  private normalizeOptionalText(
+    value: string | null | undefined,
+    field: string,
+  ): string | null {
+    if (value === undefined || value === null) {
+      return null;
     }
+    const normalized = value.trim();
+    if (!normalized) {
+      return null;
+    }
+    if (normalized.length > 500) {
+      throw new BadRequestException(`${field} no debe superar 500 caracteres.`);
+    }
+    return normalized;
   }
 
   private sortByStatusPriorityAndDate(
@@ -480,6 +325,49 @@ export class TenantInvitationsService {
     return status;
   }
 
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private handleKnownErrors(error: unknown): void {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        throw new ConflictException(
+          'Ya existe una invitacion pendiente para ese email en este tenant.',
+        );
+      }
+      if (error.code === 'P2003') {
+        throw new BadRequestException(
+          'La relacion referencial de la invitacion es invalida.',
+        );
+      }
+      if (error.code === 'P2025') {
+        throw new NotFoundException('No se encontro el registro solicitado.');
+      }
+    }
+  }
+
+  private handleFunctionErrors(error: unknown): void {
+    if (error instanceof Error) {
+      const message = error.message;
+      if (message.includes('permiso')) {
+        throw new ForbiddenException('No tiene permisos suficientes para esta operacion.');
+      }
+      if (message.includes('correo verificado')) {
+        throw new ForbiddenException('El usuario debe estar activo y tener el correo verificado.');
+      }
+      if (message.includes('expir')) {
+        throw new ConflictException('La invitacion ha expirado.');
+      }
+      if (message.includes('no está disponible') || message.includes('no esta disponible')) {
+        throw new ConflictException('La invitacion ya fue procesada o no esta disponible.');
+      }
+      if (message.includes('otro correo')) {
+        throw new ForbiddenException('La invitacion no pertenece al usuario autenticado.');
+      }
+    }
+  }
+
   private toResponse(
     invitation: InvitationRecord,
     now: Date = new Date(),
@@ -499,6 +387,7 @@ export class TenantInvitationsService {
       expiresAt: invitation.expires_at,
       acceptedAt: invitation.accepted_at,
       revokedAt: invitation.revoked_at,
+      rejectedAt: invitation.rejected_at,
       invitedBy: Number(invitation.invited_by),
       createdAt: invitation.created_at,
     };

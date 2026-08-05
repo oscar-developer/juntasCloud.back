@@ -25,6 +25,7 @@ export class ConceptosCobroService {
       const item = await tx.conceptos_cobro.create({
         data: {
           id_tenant: tenantId,
+          cod_concepto_cobro: this.buildCode(dto.nombre, 'CC'),
           nombre: this.normalizeRequiredText(dto.nombre, 'nombre'),
           tipo: dto.tipo,
           activo: dto.activo ?? true,
@@ -234,5 +235,16 @@ export class ConceptosCobroService {
       requierePeriodo: item.requiere_periodo,
       observaciones: item.observaciones,
     };
+  }
+
+  private buildCode(value: string, prefix: string): string {
+    const normalized = value
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 12);
+    const suffix = Date.now().toString(36).toUpperCase().slice(-4);
+    return `${prefix}_${normalized || 'ITEM'}_${suffix}`.slice(0, 20);
   }
 }

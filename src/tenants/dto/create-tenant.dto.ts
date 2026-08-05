@@ -26,10 +26,10 @@ export class CreateTenantDto {
   @MaxLength(20)
   numeroDocumento?: string | null;
 
-  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO'], default: 'ACTIVO' })
+  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO', 'SUSPENDIDO'], default: 'ACTIVO' })
   @IsOptional()
-  @IsIn(['ACTIVO', 'INACTIVO'])
-  estado?: 'ACTIVO' | 'INACTIVO';
+  @IsIn(['ACTIVO', 'INACTIVO', 'SUSPENDIDO'])
+  estado?: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
 
   @ApiPropertyOptional({ example: 'Tenant creado desde API', maxLength: 300 })
   @IsOptional()

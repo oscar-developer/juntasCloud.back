@@ -25,6 +25,7 @@ export class CajaCategoriasService {
       const item = await tx.caja_categorias.create({
         data: {
           id_tenant: tenantId,
+          cod_categoria: this.buildCode(dto.nombre, 'CAT'),
           nombre: this.normalizeRequiredText(dto.nombre, 'nombre'),
           tipo: dto.tipo,
           activo: dto.activo ?? true,
@@ -210,5 +211,16 @@ export class CajaCategoriasService {
       tipo: item.tipo,
       activo: item.activo,
     };
+  }
+
+  private buildCode(value: string, prefix: string): string {
+    const normalized = value
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 12);
+    const suffix = Date.now().toString(36).toUpperCase().slice(-4);
+    return `${prefix}_${normalized || 'ITEM'}_${suffix}`.slice(0, 20);
   }
 }

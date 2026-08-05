@@ -13,6 +13,12 @@ type SendPasswordResetInput = {
   expiresInHours: number;
 };
 
+type SendTenantInvitationInput = {
+  email: string;
+  token: string;
+  expiresInDays: number;
+};
+
 @Injectable()
 export class MailService {
   async sendEmailVerification(
@@ -98,6 +104,48 @@ export class MailService {
     } catch {
       throw new InternalServerErrorException(
         'No se pudo enviar el correo de recuperacion. Intentalo nuevamente.',
+      );
+    }
+  }
+
+  async sendTenantInvitation(input: SendTenantInvitationInput): Promise<void> {
+    const config = this.getSmtpConfig();
+    const invitationUrl = this.buildFrontendUrl(
+      config.frontendBaseUrl,
+      '/tenant-invitations/accept',
+      input.token,
+    );
+
+    const transporter: Transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: {
+        user: config.user,
+        pass: config.pass,
+      },
+    });
+
+    const subject = 'Invitacion a JuntasCloud';
+    const text = [
+      'Hola,',
+      '',
+      `Para aceptar la invitacion, abre este enlace: ${invitationUrl}`,
+      `Este enlace expira en ${input.expiresInDays} dias.`,
+    ].join('\n');
+    const html = `<p>Hola,</p><p>Para aceptar la invitacion, haz clic en el siguiente enlace:</p><p><a href="${invitationUrl}">${invitationUrl}</a></p><p>Este enlace expira en ${input.expiresInDays} dias.</p>`;
+
+    try {
+      await transporter.sendMail({
+        from: config.from,
+        to: input.email,
+        subject,
+        text,
+        html,
+      });
+    } catch {
+      throw new InternalServerErrorException(
+        'No se pudo enviar el correo de invitacion. Intentalo nuevamente.',
       );
     }
   }

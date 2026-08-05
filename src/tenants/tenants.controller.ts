@@ -52,7 +52,7 @@ export class TenantsController {
   @Get()
   @ApiOperation({ summary: 'Listar tenants' })
   @ApiQuery({ name: 'nombre', required: false })
-  @ApiQuery({ name: 'estado', required: false, enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiQuery({ name: 'estado', required: false, enum: ['ACTIVO', 'INACTIVO', 'SUSPENDIDO'] })
   @ApiQuery({ name: 'skip', required: false, type: Number })
   @ApiQuery({ name: 'take', required: false, type: Number })
   @ApiOkResponse({ type: TenantResponseDto, isArray: true })

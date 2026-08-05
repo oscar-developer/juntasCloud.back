@@ -10,8 +10,8 @@ datasource db {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model asambleas {
+  id_asamblea          BigInt                 @id(map: "pk_asambleas") @default(autoincrement())
   id_tenant            BigInt
-  id_asamblea          BigInt                 @default(autoincrement())
   fecha_programada     DateTime               @db.Timestamptz(6)
   hora_inicio_real     DateTime?              @db.Timestamptz(6)
   hora_fin_real        DateTime?              @db.Timestamptz(6)
@@ -34,14 +34,14 @@ model asambleas {
   caja_movimientos     caja_movimientos[]
   obligaciones_persona obligaciones_persona[]
 
-  @@id([id_tenant, id_asamblea], map: "pk_asambleas")
+  @@unique([id_tenant, id_asamblea], map: "uq_asambleas_tenant_asamblea")
   @@index([id_tenant, fecha_programada], map: "inx_asambleas_fecha")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model asistencia_asamblea {
+  id_asistencia                                              BigInt      @id(map: "pk_asistencia_asamblea") @default(autoincrement())
   id_tenant                                                  BigInt
-  id_asistencia                                              BigInt      @default(autoincrement())
   id_asamblea                                                BigInt
   id_persona                                                 BigInt
   estado                                                     String      @default("PENDIENTE") @db.VarChar(15)
@@ -65,7 +65,7 @@ model asistencia_asamblea {
   tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea00")
   auth_users_asistencia_asamblea_updated_by_userToauth_users auth_users? @relation("asistencia_asamblea_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea_updated_by")
 
-  @@id([id_tenant, id_asistencia], map: "pk_asistencia_asamblea")
+  @@unique([id_tenant, id_asistencia])
   @@unique([id_tenant, id_asamblea, id_persona], map: "ux_asistencia_asamblea")
   @@index([id_tenant, id_asamblea], map: "inx_asistencia_asamblea_asamblea")
   @@index([id_tenant, estado], map: "inx_asistencia_asamblea_estado")
@@ -73,7 +73,7 @@ model asistencia_asamblea {
 }
 
 model auth_login_logs {
-  id_log         BigInt      @id @default(autoincrement())
+  id_log         BigInt      @id(map: "pk_auth_login_logs") @default(autoincrement())
   id_user        BigInt?
   email          String      @db.Citext
   login_at       DateTime    @default(now()) @db.Timestamptz(6)
@@ -83,9 +83,9 @@ model auth_login_logs {
   failure_reason String?     @db.VarChar(100)
   auth_users     auth_users? @relation(fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_login_user")
 
-  @@index([login_at], map: "inx_login_logs_date")
-  @@index([success], map: "inx_login_logs_success")
-  @@index([id_user], map: "inx_login_logs_user")
+  @@index([login_at], map: "ix_auth_login_logs_date")
+  @@index([success], map: "ix_auth_login_logs_success")
+  @@index([id_user], map: "ix_auth_login_logs_user")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -127,16 +127,15 @@ model auth_users {
   tenant_invitations                                                    tenant_invitations[]
   tenant_users_tenant_users_invited_byToauth_users                      tenant_users[]           @relation("tenant_users_invited_byToauth_users")
   tenant_users_tenant_users_id_userToauth_users                         tenant_users[]           @relation("tenant_users_id_userToauth_users")
-  tenants                                                               tenants[]
 
-  @@index([estado], map: "inx_auth_users_estado")
+  @@index([estado], map: "ix_auth_users_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model bienes {
+  id_bien          BigInt             @id(map: "pk_bienes") @default(autoincrement())
   id_tenant        BigInt
-  id_bien          BigInt             @default(autoincrement())
   descripcion      String             @db.VarChar(200)
   tipo             String?            @db.VarChar(50)
   cantidad         Int
@@ -151,7 +150,7 @@ model bienes {
   tenants          tenants            @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_bienes00")
   caja_movimientos caja_movimientos[]
 
-  @@id([id_tenant, id_bien], map: "pk_bienes")
+  @@unique([id_tenant, id_bien], map: "uq_bienes_tenant_bien")
   @@index([id_tenant, estado], map: "inx_bienes_estado")
   @@index([id_tenant, tipo], map: "inx_bienes_tipo")
 }
@@ -159,8 +158,8 @@ model bienes {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model caja_movimientos {
+  id_movimiento                                           BigInt             @id(map: "pk_caja_movimientos") @default(autoincrement())
   id_tenant                                               BigInt
-  id_movimiento                                           BigInt             @default(autoincrement())
   fecha                                                   DateTime           @db.Date
   tipo                                                    String             @db.VarChar(10)
   monto                                                   Decimal            @db.Decimal(10, 2)
@@ -194,7 +193,7 @@ model caja_movimientos {
   auth_users                                              auth_users         @relation(fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_caja_movimientos_user")
   obligacion_pagos                                        obligacion_pagos[]
 
-  @@id([id_tenant, id_movimiento], map: "pk_caja_movimientos")
+  @@unique([id_tenant, id_movimiento], map: "uq_caja_movimientos_tenant_movimiento")
   @@index([id_tenant, fecha, tipo], map: "inx_cm_fecha_tipo")
   @@index([id_tenant, id_persona], map: "inx_cm_persona")
   @@index([id_tenant, id_user], map: "inx_cm_user")
@@ -203,8 +202,8 @@ model caja_movimientos {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model faena_participacion {
+  id_faena_participacion                                     BigInt      @id(map: "pk_faena_participacion") @default(autoincrement())
   id_tenant                                                  BigInt
-  id_faena_participacion                                     BigInt      @default(autoincrement())
   id_faena                                                   BigInt
   id_persona                                                 BigInt
   estado                                                     String      @default("PENDIENTE") @db.VarChar(15)
@@ -228,7 +227,7 @@ model faena_participacion {
   tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion00")
   auth_users_faena_participacion_updated_by_userToauth_users auth_users? @relation("faena_participacion_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion_updated_by")
 
-  @@id([id_tenant, id_faena_participacion], map: "pk_faena_participacion")
+  @@unique([id_tenant, id_faena_participacion])
   @@unique([id_tenant, id_faena, id_persona], map: "ux_faena_participacion")
   @@index([id_tenant, estado], map: "inx_fp_estado")
   @@index([id_tenant, id_faena], map: "inx_fp_faena")
@@ -237,8 +236,8 @@ model faena_participacion {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model faenas {
+  id_faena             BigInt                 @id(map: "pk_faenas") @default(autoincrement())
   id_tenant            BigInt
-  id_faena             BigInt                 @default(autoincrement())
   fecha_programada     DateTime               @db.Date
   hora_inicio          DateTime?              @db.Time(6)
   hora_fin             DateTime?              @db.Time(6)
@@ -256,15 +255,15 @@ model faenas {
   tenants              tenants                @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_faenas00")
   obligaciones_persona obligaciones_persona[]
 
-  @@id([id_tenant, id_faena], map: "pk_faenas")
+  @@unique([id_tenant, id_faena], map: "uq_faenas_tenant_faena")
   @@index([id_tenant, fecha_programada], map: "inx_faenas_fecha")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model junta_miembros {
+  id_junta_miembro  BigInt            @id(map: "pk_junta_miembros") @default(autoincrement())
   id_tenant         BigInt
-  id_junta_miembro  BigInt            @default(autoincrement())
   id_junta          BigInt
   id_persona        BigInt
   cargo             String            @db.VarChar(20)
@@ -276,7 +275,7 @@ model junta_miembros {
   juntas_directivas juntas_directivas @relation(fields: [id_tenant, id_junta], references: [id_tenant, id_junta], onDelete: NoAction, onUpdate: NoAction, map: "fk_junta_miembros01")
   personas          personas          @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_junta_miembros02")
 
-  @@id([id_tenant, id_junta_miembro], map: "pk_junta_miembros")
+  @@unique([id_tenant, id_junta_miembro])
   @@unique([id_tenant, id_junta, cargo], map: "ux_junta_presidente_activo", where: raw("(((cargo)::text = 'PRESIDENTE'::text) AND (fecha_fin IS NULL))"))
   @@index([id_tenant, id_junta], map: "inx_junta_miembros_junta")
   @@index([id_tenant, id_persona], map: "inx_junta_miembros_persona")
@@ -285,8 +284,8 @@ model junta_miembros {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model juntas_directivas {
+  id_junta           BigInt           @id(map: "pk_juntas_directivas") @default(autoincrement())
   id_tenant          BigInt           @unique(map: "ux_junta_vigente", where: raw("((estado)::text = 'VIGENTE'::text)"))
-  id_junta           BigInt           @default(autoincrement())
   nombre             String           @db.VarChar(100)
   fecha_eleccion     DateTime?        @db.Date
   fecha_inicio       DateTime         @db.Date
@@ -299,15 +298,15 @@ model juntas_directivas {
   junta_miembros     junta_miembros[]
   tenants            tenants          @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_juntas_directivas00")
 
-  @@id([id_tenant, id_junta], map: "pk_juntas_directivas")
+  @@unique([id_tenant, id_junta], map: "uq_juntas_directivas_tenant_junta")
   @@index([id_tenant, estado], map: "inx_juntas_directivas_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model persona_terreno {
+  id_persona_terreno       BigInt   @id(map: "pk_persona_terreno") @default(autoincrement())
   id_tenant                BigInt
-  id_persona_terreno       BigInt   @default(autoincrement())
   id_persona               BigInt
   id_terreno               BigInt
   tipo_relacion            String   @db.VarChar(15)
@@ -316,15 +315,16 @@ model persona_terreno {
   tenants                  tenants  @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_terreno00")
   terrenos                 terrenos @relation(fields: [id_tenant, id_terreno], references: [id_tenant, id_terreno], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_terreno02")
 
-  @@id([id_tenant, id_persona_terreno], map: "pk_persona_terreno")
+  @@unique([id_tenant, id_persona_terreno])
   @@unique([id_tenant, id_persona, id_terreno], map: "ux_persona_terreno")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model personas {
+  id_persona           BigInt                 @id(map: "pk_personas") @default(autoincrement())
   id_tenant            BigInt
-  id_persona           BigInt                 @default(autoincrement())
+  nro_padron           Int?
   nombres              String                 @db.VarChar(100)
   apellido_paterno     String                 @db.VarChar(100)
   apellido_materno     String                 @db.VarChar(100)
@@ -349,97 +349,112 @@ model personas {
   persona_condiciones  persona_condiciones[]
   persona_terreno      persona_terreno[]
   tenants              tenants                @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_personas00")
+  tenant_users         tenant_users?
 
-  @@id([id_tenant, id_persona], map: "pk_personas")
   @@unique([id_tenant, dni], map: "ux_personas_dni", where: raw("(dni IS NOT NULL)"))
+  @@unique([id_tenant, id_persona], map: "uq_personas_tenant_persona")
+  @@unique([id_tenant, nro_padron], map: "ux_personas_nro_padron", where: raw("(nro_padron IS NOT NULL)"))
   @@index([id_tenant, apellido_paterno, apellido_materno, nombres], map: "inx_personas_nombre")
   @@index([id_tenant], map: "inx_personas_tenant")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model tenant_invitations {
-  id_invitation BigInt     @id(map: "pk_tenant_invitations") @default(autoincrement())
-  id_tenant     BigInt
-  email         String     @db.Citext
-  role          String     @default("MEMBER") @db.VarChar(15)
-  token_hash    String     @unique(map: "ux_inv_token_hash") @db.VarChar(255)
-  status        String     @default("PENDING") @db.VarChar(15)
-  expires_at    DateTime   @db.Timestamptz(6)
-  accepted_at   DateTime?  @db.Timestamptz(6)
-  revoked_at    DateTime?  @db.Timestamptz(6)
-  invited_by    BigInt
-  created_at    DateTime   @default(now()) @db.Timestamptz(6)
-  tenants       tenants    @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_inv_tenant")
-  auth_users    auth_users @relation(fields: [invited_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_inv_user")
+  id_invitation   BigInt           @id(map: "pk_tenant_invitations") @default(autoincrement())
+  id_tenant       BigInt
+  email           String           @db.Citext
+  role            String           @default("MEMBER") @db.VarChar(15)
+  id_profile      BigInt?
+  token_hash      String           @unique(map: "ux_tenant_invitations_token_hash") @db.VarChar(255)
+  status          String           @default("PENDING") @db.VarChar(15)
+  expires_at      DateTime         @db.Timestamptz(6)
+  accepted_at     DateTime?        @db.Timestamptz(6)
+  rejected_at     DateTime?        @db.Timestamptz(6)
+  revoked_at      DateTime?        @db.Timestamptz(6)
+  invited_by      BigInt
+  message         String?          @db.VarChar(500)
+  created_at      DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime         @default(now()) @db.Timestamptz(6)
+  auth_users      auth_users       @relation(fields: [invited_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_inv_user")
+  tenant_profiles tenant_profiles? @relation(fields: [id_tenant, id_profile], references: [id_tenant, id_profile], onDelete: NoAction, onUpdate: NoAction, map: "fk_tenant_invitations_profile")
+  tenants         tenants          @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_inv_tenant")
 
-  @@unique([id_tenant, email], map: "ux_inv_pending_per_email", where: raw("((status)::text = 'PENDING'::text)"))
-  @@index([email], map: "inx_inv_email")
-  @@index([status], map: "inx_inv_status")
-  @@index([id_tenant], map: "inx_inv_tenant")
+  @@unique([id_tenant, email], map: "ux_tenant_invitations_pending_email", where: raw("((status)::text = 'PENDING'::text)"))
+  @@index([email, status], map: "ix_tenant_invitations_email_status")
+  @@index([expires_at], map: "ix_tenant_invitations_expires", where: raw("((status)::text = 'PENDING'::text)"))
+  @@index([id_tenant, status], map: "ix_tenant_invitations_tenant_status")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model tenant_users {
-  id_tenant                                      BigInt      @unique(map: "ux_one_owner_per_tenant", where: raw("(((role)::text = 'OWNER'::text) AND ((estado)::text = 'ACTIVO'::text))"))
+  id_tenant                                      BigInt
   id_user                                        BigInt
-  role                                           String      @default("MEMBER") @db.VarChar(15)
-  estado                                         String      @default("PENDIENTE") @db.VarChar(15)
-  joined_at                                      DateTime    @default(now()) @db.Timestamptz(6)
-  accepted_at                                    DateTime?   @db.Timestamptz(6)
-  ended_at                                       DateTime?   @db.Timestamptz(6)
+  role                                           String           @default("MEMBER") @db.VarChar(15)
+  estado                                         String           @default("ACTIVO") @db.VarChar(15)
+  joined_at                                      DateTime         @default(now()) @db.Timestamptz(6)
+  ended_at                                       DateTime?        @db.Timestamptz(6)
   invited_by                                     BigInt?
   id_persona                                     BigInt?
   id_profile                                     BigInt?
-  auth_users_tenant_users_invited_byToauth_users auth_users? @relation("tenant_users_invited_byToauth_users", fields: [invited_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_invited")
-  tenants                                        tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_tenant")
-  auth_users_tenant_users_id_userToauth_users    auth_users  @relation("tenant_users_id_userToauth_users", fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_user")
+  created_at                                     DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at                                     DateTime         @default(now()) @db.Timestamptz(6)
+  auth_users_tenant_users_invited_byToauth_users auth_users?      @relation("tenant_users_invited_byToauth_users", fields: [invited_by], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_invited")
+  personas                                       personas?        @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_tenant_users_persona")
+  tenant_profiles                                tenant_profiles? @relation(fields: [id_tenant, id_profile], references: [id_tenant, id_profile], onDelete: NoAction, onUpdate: NoAction, map: "fk_tenant_users_profile")
+  tenants                                        tenants          @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_tenant")
+  auth_users_tenant_users_id_userToauth_users    auth_users       @relation("tenant_users_id_userToauth_users", fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tu_user")
 
   @@id([id_tenant, id_user], map: "pk_tenant_users")
   @@unique([id_tenant, id_persona], map: "ux_tenant_users_persona", where: raw("(id_persona IS NOT NULL)"))
-  @@index([id_tenant, role, estado], map: "inx_tenant_users_tenant_role_estado")
-  @@index([id_user], map: "inx_tenant_users_user")
+  @@index([id_tenant, role, estado], map: "ix_tenant_users_tenant_role_estado")
+  @@index([id_user, estado], map: "ix_tenant_users_user_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model tenants {
-  id_tenant           BigInt                @id(map: "pk_tenants") @default(autoincrement())
-  nombre              String                @db.VarChar(150)
-  tipo_documento      String?               @db.VarChar(15)
-  numero_documento    String?               @db.VarChar(20)
-  estado              String                @default("ACTIVO") @db.VarChar(15)
-  observaciones       String?               @db.VarChar(300)
-  created_at          DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
-  owner_user_id       BigInt
-  asambleas           asambleas[]
-  asistencia_asamblea asistencia_asamblea[]
-  bienes              bienes[]
-  caja_categorias     caja_categorias[]
-  caja_movimientos    caja_movimientos[]
-  conceptos_cobro     conceptos_cobro[]
-  documentos          documentos[]
-  faena_participacion faena_participacion[]
-  faenas              faenas[]
-  juntas_directivas   juntas_directivas?
-  persona_terreno     persona_terreno[]
-  personas            personas[]
-  tenant_invitations  tenant_invitations[]
-  tenant_profiles     tenant_profiles[]
-  tenant_users        tenant_users?
-  auth_users          auth_users            @relation(fields: [owner_user_id], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_tenants_owner")
-  terrenos            terrenos[]
+  id_tenant              BigInt                   @id(map: "pk_tenants") @default(autoincrement())
+  nombre                 String                   @db.VarChar(150)
+  tipo_documento         String?                  @db.VarChar(15)
+  numero_documento       String?                  @db.VarChar(20)
+  tenant_type            String                   @default("PRACTICE") @db.VarChar(15)
+  estado                 String                   @default("ACTIVO") @db.VarChar(15)
+  observaciones          String?                  @db.VarChar(300)
+  deleted_at             DateTime?                @db.Timestamptz(6)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  asambleas              asambleas[]
+  asistencia_asamblea    asistencia_asamblea[]
+  bienes                 bienes[]
+  caja_categorias        caja_categorias[]
+  caja_movimientos       caja_movimientos[]
+  conceptos_cobro        conceptos_cobro[]
+  credito_movimientos    credito_movimientos[]
+  creditos_persona       creditos_persona[]
+  documentos             documentos[]
+  faena_participacion    faena_participacion[]
+  faenas                 faenas[]
+  juntas_directivas      juntas_directivas?
+  obligacion_movimientos obligacion_movimientos[]
+  obligacion_pagos       obligacion_pagos[]
+  obligaciones_persona   obligaciones_persona[]
+  persona_terreno        persona_terreno[]
+  personas               personas[]
+  tenant_invitations     tenant_invitations[]
+  tenant_profiles        tenant_profiles[]
+  tenant_users           tenant_users[]
+  terrenos               terrenos[]
 
-  @@unique([owner_user_id, nombre], map: "ux_tenants_owner_nombre")
-  @@index([estado], map: "inx_tenants_estado")
+  @@index([tipo_documento, numero_documento], map: "ix_tenants_documento", where: raw("((tipo_documento IS NOT NULL) AND (numero_documento IS NOT NULL))"))
+  @@index([estado], map: "ix_tenants_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model terrenos {
+  id_terreno        BigInt            @id(map: "pk_terrenos") @default(autoincrement())
   id_tenant         BigInt
-  id_terreno        BigInt            @default(autoincrement())
   codigo_lote       String?           @db.VarChar(30)
   manzana           String?           @db.VarChar(20)
   numero_lote       String?           @db.VarChar(20)
@@ -455,7 +470,7 @@ model terrenos {
   persona_terreno   persona_terreno[]
   tenants           tenants           @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_terrenos00")
 
-  @@id([id_tenant, id_terreno], map: "pk_terrenos")
+  @@unique([id_tenant, id_terreno], map: "uq_terrenos_tenant_terreno")
   @@index([id_tenant, estado], map: "inx_terrenos_estado")
 }
 
@@ -473,14 +488,14 @@ model auth_user_tokens {
   user_agent String?
   auth_users auth_users @relation(fields: [id_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_auth_user_tokens_user")
 
-  @@index([expires_at], map: "inx_auth_user_tokens_expires")
-  @@index([id_user], map: "inx_auth_user_tokens_user")
-  @@index([id_user, token_type], map: "inx_auth_user_tokens_user_type")
+  @@index([expires_at], map: "ix_auth_user_tokens_expires")
+  @@index([id_user], map: "ix_auth_user_tokens_user")
+  @@index([id_user, token_type], map: "ix_auth_user_tokens_user_type")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model audit_log {
-  id_audit        BigInt      @id @default(autoincrement())
+  id_audit        BigInt      @id(map: "pk_audit") @default(autoincrement())
   id_tenant       BigInt?
   table_name      String      @db.VarChar(100)
   record_pk       String      @db.VarChar(200)
@@ -491,27 +506,32 @@ model audit_log {
   changed_by_user BigInt?
   ip_address      String?     @db.VarChar(45)
   auth_users      auth_users? @relation(fields: [changed_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_audit_user")
+
+  @@index([id_tenant, table_name, record_pk], map: "inx_audit_log_tenant_record")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model caja_categorias {
+  id_categoria_caja BigInt             @id(map: "pk_caja_categorias") @default(autoincrement())
   id_tenant         BigInt
-  id_categoria_caja BigInt             @default(autoincrement())
-  nombre            String             @db.VarChar(100)
+  cod_categoria     String             @db.VarChar(20)
+  nombre            String             @db.VarChar(150)
   tipo              String             @db.VarChar(10)
   activo            Boolean            @default(true)
   tenants           tenants            @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_ccat_tenant")
   caja_movimientos  caja_movimientos[]
 
-  @@id([id_tenant, id_categoria_caja], map: "pk_caja_categorias")
+  @@unique([id_tenant, id_categoria_caja], map: "uq_caja_categorias_tenant_categoria")
+  @@unique([id_tenant, cod_categoria], map: "ux_ccat_categoria")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model conceptos_cobro {
+  id_concepto_cobro    BigInt                 @id(map: "pk_conceptos_cobro") @default(autoincrement())
   id_tenant            BigInt
-  id_concepto_cobro    BigInt                 @default(autoincrement())
+  cod_concepto_cobro   String                 @db.VarChar(20)
   nombre               String                 @db.VarChar(100)
   tipo                 String                 @db.VarChar(25)
   activo               Boolean                @default(true)
@@ -520,14 +540,15 @@ model conceptos_cobro {
   tenants              tenants                @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_conceptos_tenant")
   obligaciones_persona obligaciones_persona[]
 
-  @@id([id_tenant, id_concepto_cobro], map: "pk_conceptos_cobro")
+  @@unique([id_tenant, id_concepto_cobro], map: "uq_conceptos_cobro_tenant_concepto")
+  @@unique([id_tenant, cod_concepto_cobro], map: "ux_conceptos_cobro")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model credito_movimientos {
+  id_credito_movimiento BigInt           @id(map: "pk_credito_movimientos") @default(autoincrement())
   id_tenant             BigInt
-  id_credito_movimiento BigInt           @default(autoincrement())
   id_credito            BigInt
   tipo_movimiento       String           @db.VarChar(20)
   cantidad              Decimal          @db.Decimal(10, 2)
@@ -538,15 +559,17 @@ model credito_movimientos {
   created_by_user       BigInt
   auth_users            auth_users       @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_created_by")
   creditos_persona      creditos_persona @relation(fields: [id_tenant, id_credito], references: [id_tenant, id_credito], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_credito")
+  tenants               tenants          @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_tenant")
 
-  @@id([id_tenant, id_credito_movimiento], map: "pk_credito_movimientos")
+  @@unique([id_tenant, id_credito_movimiento])
+  @@index([id_tenant, id_credito, fecha_movimiento], map: "inx_crm_credito_fecha")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model creditos_persona {
+  id_credito          BigInt                @id(map: "pk_creditos_persona") @default(autoincrement())
   id_tenant           BigInt
-  id_credito          BigInt                @default(autoincrement())
   id_persona          BigInt
   tipo_credito        String                @db.VarChar(20)
   cantidad_original   Decimal               @db.Decimal(10, 2)
@@ -563,15 +586,17 @@ model creditos_persona {
   credito_movimientos credito_movimientos[]
   auth_users          auth_users            @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_cp_created_by")
   personas            personas              @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_cp_persona")
+  tenants             tenants               @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_cp_tenant")
 
-  @@id([id_tenant, id_credito], map: "pk_creditos_persona")
+  @@unique([id_tenant, id_credito], map: "uq_creditos_persona_tenant_credito")
+  @@index([id_tenant, id_persona, estado], map: "inx_creditos_persona_persona_estado")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model documentos {
+  id_documento     BigInt     @id(map: "pk_documentos") @default(autoincrement())
   id_tenant        BigInt
-  id_documento     BigInt     @default(autoincrement())
   modulo           String     @db.VarChar(30)
   entidad_id       BigInt
   nombre_archivo   String     @db.VarChar(255)
@@ -585,14 +610,14 @@ model documentos {
   tenants          tenants    @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_documentos_tenant")
   auth_users       auth_users @relation(fields: [uploaded_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_documentos_user")
 
-  @@id([id_tenant, id_documento], map: "pk_documentos")
+  @@index([id_tenant, modulo, entidad_id], map: "inx_documentos_entidad")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model obligacion_movimientos {
+  id_obligacion_movimiento BigInt               @id(map: "pk_obligacion_movimientos") @default(autoincrement())
   id_tenant                BigInt
-  id_obligacion_movimiento BigInt               @default(autoincrement())
   id_obligacion            BigInt
   tipo_movimiento          String               @db.VarChar(20)
   monto                    Decimal              @db.Decimal(10, 2)
@@ -603,15 +628,17 @@ model obligacion_movimientos {
   created_by_user          BigInt
   auth_users               auth_users           @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_created_by")
   obligaciones_persona     obligaciones_persona @relation(fields: [id_tenant, id_obligacion], references: [id_tenant, id_obligacion], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_obligacion")
+  tenants                  tenants              @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_tenant")
 
-  @@id([id_tenant, id_obligacion_movimiento], map: "pk_obligacion_movimientos")
+  @@unique([id_tenant, id_obligacion_movimiento])
+  @@index([id_tenant, id_obligacion, fecha_movimiento], map: "inx_om_obligacion_fecha")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model obligacion_pagos {
+  id_obligacion_pago   BigInt               @id(map: "pk_obligacion_pagos") @default(autoincrement())
   id_tenant            BigInt
-  id_obligacion_pago   BigInt               @default(autoincrement())
   id_obligacion        BigInt
   id_movimiento        BigInt
   monto_aplicado       Decimal              @db.Decimal(10, 2)
@@ -620,15 +647,18 @@ model obligacion_pagos {
   auth_users           auth_users           @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_created_by")
   caja_movimientos     caja_movimientos     @relation(fields: [id_tenant, id_movimiento], references: [id_tenant, id_movimiento], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_movimiento")
   obligaciones_persona obligaciones_persona @relation(fields: [id_tenant, id_obligacion], references: [id_tenant, id_obligacion], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_obligacion")
+  tenants              tenants              @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_tenant")
 
-  @@id([id_tenant, id_obligacion_pago], map: "pk_obligacion_pagos")
+  @@unique([id_tenant, id_obligacion_pago])
+  @@index([id_tenant, id_movimiento], map: "inx_obp_movimiento")
+  @@index([id_tenant, id_obligacion], map: "inx_obp_obligacion")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model obligaciones_persona {
+  id_obligacion                                               BigInt                   @id(map: "pk_obligaciones_persona") @default(autoincrement())
   id_tenant                                                   BigInt
-  id_obligacion                                               BigInt                   @default(autoincrement())
   id_persona                                                  BigInt
   id_concepto_cobro                                           BigInt
   periodo                                                     String?                  @db.VarChar(20)
@@ -639,10 +669,10 @@ model obligaciones_persona {
   monto_exonerado                                             Decimal                  @default(0) @db.Decimal(10, 2)
   monto_compensado                                            Decimal                  @default(0) @db.Decimal(10, 2)
   saldo                                                       Decimal                  @db.Decimal(10, 2)
-  estado                                                      String                   @default("PENDIENTE") @db.VarChar(20)
   id_faena                                                    BigInt?
   id_asamblea                                                 BigInt?
   observaciones                                               String?
+  estado                                                      String                   @default("PENDIENTE") @db.VarChar(20)
   created_at                                                  DateTime                 @default(now()) @db.Timestamptz(6)
   created_by_user                                             BigInt
   updated_at                                                  DateTime?                @db.Timestamptz(6)
@@ -658,17 +688,18 @@ model obligaciones_persona {
   auth_users_obligaciones_persona_created_by_userToauth_users auth_users               @relation("obligaciones_persona_created_by_userToauth_users", fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_created_by")
   faenas                                                      faenas?                  @relation(fields: [id_tenant, id_faena], references: [id_tenant, id_faena], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_faena")
   personas                                                    personas                 @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_persona")
+  tenants                                                     tenants                  @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_tenant")
   auth_users_obligaciones_persona_updated_by_userToauth_users auth_users?              @relation("obligaciones_persona_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_op_updated_by")
 
-  @@id([id_tenant, id_obligacion], map: "pk_obligaciones_persona")
+  @@unique([id_tenant, id_obligacion], map: "uq_obligaciones_persona_tenant_obligacion")
   @@index([id_tenant, estado], map: "inx_obligaciones_persona_estado")
   @@index([id_tenant, id_persona], map: "inx_obligaciones_persona_persona")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model persona_condiciones {
+  id_persona_condicion BigInt     @id(map: "pk_persona_condiciones") @default(autoincrement())
   id_tenant            BigInt
-  id_persona_condicion BigInt     @default(autoincrement())
   id_persona           BigInt
   condicion            String     @db.VarChar(20)
   fecha_inicio         DateTime   @db.Date
@@ -679,59 +710,63 @@ model persona_condiciones {
   personas             personas   @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_pc_persona")
   auth_users           auth_users @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_pc_user")
 
-  @@id([id_tenant, id_persona_condicion], map: "pk_persona_condiciones")
+  @@index([id_tenant, id_persona, fecha_inicio], map: "inx_pc_persona_fecha")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model caja_categorias_base {
-  id_categoria_caja_base BigInt  @id(map: "pk_caja_categorias_base") @default(autoincrement())
-  nombre                 String  @db.VarChar(100)
-  tipo                   String  @db.VarChar(10)
-  activo                 Boolean @default(true)
-
-  @@unique([nombre, tipo], map: "ux_caja_categorias_base_nombre_tipo")
+  cod_categoria String  @id(map: "pk_caja_categorias_base") @db.VarChar(20)
+  nombre        String  @db.VarChar(100)
+  tipo          String  @db.VarChar(10)
+  activo        Boolean @default(true)
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model conceptos_cobro_base {
-  id_concepto_cobro_base BigInt  @id(map: "pk_conceptos_cobro_base") @default(autoincrement())
-  nombre                 String  @db.VarChar(100)
-  tipo                   String  @unique(map: "ux_conceptos_cobro_base_tipo") @db.VarChar(25)
-  activo                 Boolean @default(true)
-  requiere_periodo       Boolean @default(false)
-  observaciones          String?
+  cod_concepto_cobro String  @id(map: "pk_conceptos_cobro_base") @db.VarChar(20)
+  nombre             String  @db.VarChar(100)
+  tipo               String  @db.VarChar(25)
+  activo             Boolean @default(true)
+  requiere_periodo   Boolean @default(false)
+  observaciones      String?
 }
 
 model app_modules {
-  module_code            String                   @id @db.VarChar(80)
+  module_code            String                   @id(map: "pk_app_modules") @db.VarChar(80)
   nombre                 String                   @db.VarChar(100)
   grupo                  String                   @db.VarChar(100)
   orden                  Int                      @default(0)
-  activo                 Boolean                  @default(true)
+  estado                 Boolean                  @default(true)
   tenant_profile_modules tenant_profile_modules[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model tenant_profile_modules {
-  id_tenant       BigInt
   id_profile      BigInt
   module_code     String          @db.VarChar(80)
   access_level    String          @default("SIN_ACCESO") @db.VarChar(20)
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime        @default(now()) @db.Timestamptz(6)
   app_modules     app_modules     @relation(fields: [module_code], references: [module_code], onDelete: NoAction, onUpdate: NoAction, map: "fk_tpm_module")
-  tenant_profiles tenant_profiles @relation(fields: [id_tenant, id_profile], references: [id_tenant, id_profile], onDelete: NoAction, onUpdate: NoAction, map: "fk_tpm_profile")
+  tenant_profiles tenant_profiles @relation(fields: [id_profile], references: [id_profile], onDelete: Cascade, onUpdate: NoAction, map: "fk_tenant_profile_modules_profile")
 
-  @@id([id_tenant, id_profile, module_code], map: "pk_tenant_profile_modules")
+  @@id([id_profile, module_code], map: "pk_tenant_profile_modules")
 }
 
 model tenant_profiles {
+  id_profile             BigInt                   @id(map: "pk_tenant_profiles") @default(autoincrement())
   id_tenant              BigInt
-  id_profile             BigInt                   @default(autoincrement())
   nombre                 String                   @db.VarChar(100)
   descripcion            String?
-  activo                 Boolean                  @default(true)
+  estado                 Boolean                  @default(true)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  tenant_invitations     tenant_invitations[]
   tenant_profile_modules tenant_profile_modules[]
   tenants                tenants                  @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_tenant")
+  tenant_users           tenant_users[]
 
-  @@id([id_tenant, id_profile], map: "pk_tenant_profiles")
-  @@unique([id_tenant, nombre], map: "ux_profiles_nombre")
+  @@unique([id_tenant, nombre], map: "ux_tenant_profiles_nombre")
+  @@unique([id_tenant, id_profile], map: "ux_tenant_profiles_tenant_profile")
+  @@index([id_tenant, estado], map: "ix_tenant_profiles_tenant_estado")
 }

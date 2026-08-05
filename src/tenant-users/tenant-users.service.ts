@@ -16,7 +16,6 @@ type TenantUserListRow = {
   role: string;
   estado: string;
   joined_at: Date;
-  accepted_at: Date | null;
   ended_at: Date | null;
   invited_by: bigint | null;
   id_persona: bigint | null;
@@ -55,7 +54,6 @@ export class TenantUsersService {
           role: true,
           estado: true,
           joined_at: true,
-          accepted_at: true,
           ended_at: true,
           invited_by: true,
           id_persona: true,
@@ -131,7 +129,7 @@ export class TenantUsersService {
 
   private async hasFullAccessToAdminRoles(
     tx: Prisma.TransactionClient,
-    tenantId: bigint,
+    _tenantId: bigint,
     profileId: bigint | null,
   ): Promise<boolean> {
     if (!profileId) {
@@ -140,8 +138,7 @@ export class TenantUsersService {
 
     const permission = await tx.tenant_profile_modules.findUnique({
       where: {
-        id_tenant_id_profile_module_code: {
-          id_tenant: tenantId,
+        id_profile_module_code: {
           id_profile: profileId,
           module_code: 'admin_roles',
         },
@@ -181,7 +178,6 @@ export class TenantUsersService {
       role: row.role,
       estado: row.estado,
       joinedAt: row.joined_at,
-      acceptedAt: row.accepted_at,
       endedAt: row.ended_at,
       invitedBy: row.invited_by === null ? null : Number(row.invited_by),
       idPersona: row.id_persona === null ? null : Number(row.id_persona),

@@ -21,6 +21,7 @@ import {
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateTenantInvitationDto } from './dto/create-tenant-invitation.dto';
+import { ProcessTenantInvitationDto } from './dto/process-tenant-invitation.dto';
 import { TenantInvitationResponseDto } from './dto/tenant-invitation-response.dto';
 import { TenantInvitationsService } from './tenant-invitations.service';
 
@@ -74,38 +75,28 @@ export class TenantInvitationsController {
     return this.tenantInvitationsService.listSentMine(this.getUserId(req));
   }
 
-  @Post('me/invitations/:id/accept')
+  @Post('me/invitations/accept')
   @ApiOperation({ summary: 'Aceptar invitacion' })
-  @ApiParam({
-    name: 'id',
-    type: Number,
-    description: 'id_invitation de tenant_invitations',
-  })
   @ApiOkResponse({ type: TenantInvitationResponseDto })
   accept(
-    @Param('id') id: string,
+    @Body() dto: ProcessTenantInvitationDto,
     @Req() req: Request,
   ): Promise<TenantInvitationResponseDto> {
     return this.tenantInvitationsService.accept(
-      this.tenantInvitationsService.parseBigIntId(id, 'id'),
+      dto.token,
       this.getUserId(req),
     );
   }
 
-  @Post('me/invitations/:id/reject')
+  @Post('me/invitations/reject')
   @ApiOperation({ summary: 'Rechazar invitacion' })
-  @ApiParam({
-    name: 'id',
-    type: Number,
-    description: 'id_invitation de tenant_invitations',
-  })
   @ApiOkResponse({ type: TenantInvitationResponseDto })
   reject(
-    @Param('id') id: string,
+    @Body() dto: ProcessTenantInvitationDto,
     @Req() req: Request,
   ): Promise<TenantInvitationResponseDto> {
     return this.tenantInvitationsService.reject(
-      this.tenantInvitationsService.parseBigIntId(id, 'id'),
+      dto.token,
       this.getUserId(req),
     );
   }

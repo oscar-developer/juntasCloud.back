@@ -27,10 +27,10 @@ export class UpdateTenantDto {
   @MaxLength(20)
   numeroDocumento?: string | null;
 
-  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO', 'SUSPENDIDO'] })
   @IsOptional()
-  @IsIn(['ACTIVO', 'INACTIVO'])
-  estado?: 'ACTIVO' | 'INACTIVO';
+  @IsIn(['ACTIVO', 'INACTIVO', 'SUSPENDIDO'])
+  estado?: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
 
   @ApiPropertyOptional({ example: 'Observacion de actualizacion', maxLength: 300, nullable: true })
   @IsOptional()

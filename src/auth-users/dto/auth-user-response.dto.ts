@@ -13,7 +13,7 @@ export class AuthUserResponseDto {
   @ApiProperty({ example: 'Clemente' })
   apellidos!: string;
 
-  @ApiProperty({ enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiProperty({ enum: ['ACTIVO', 'INACTIVO', 'BLOQUEADO'] })
   estado!: string;
 
   @ApiProperty({ example: false })

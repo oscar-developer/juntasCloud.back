@@ -8,10 +8,10 @@ export class QueryTenantsDto {
   @IsString()
   nombre?: string;
 
-  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO', 'SUSPENDIDO'] })
   @IsOptional()
-  @IsIn(['ACTIVO', 'INACTIVO'])
-  estado?: 'ACTIVO' | 'INACTIVO';
+  @IsIn(['ACTIVO', 'INACTIVO', 'SUSPENDIDO'])
+  estado?: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
 
   @ApiPropertyOptional({ default: 0, minimum: 0 })
   @IsOptional()

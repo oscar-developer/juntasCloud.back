@@ -12,6 +12,17 @@ import { QueryTenantsDto } from './dto/query-tenants.dto';
 import { TenantResponseDto } from './dto/tenant-response.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 
+type TenantWithOwner = {
+  id_tenant: bigint;
+  nombre: string;
+  tipo_documento: string | null;
+  numero_documento: string | null;
+  estado: string;
+  created_at: Date;
+  observaciones: string | null;
+  tenant_users: { id_user: bigint }[];
+};
+
 @Injectable()
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -19,44 +30,43 @@ export class TenantsService {
   async create(dto: CreateTenantDto, userId: bigint): Promise<TenantResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
     const nombre = this.normalizeRequiredText(dto.nombre, 'nombre');
-    const tipoDocumento = this.normalizeOptionalText(dto.tipoDocumento, 'tipoDocumento');
-    const numeroDocumento = this.normalizeOptionalText(dto.numeroDocumento, 'numeroDocumento');
-    const observaciones = this.normalizeOptionalText(dto.observaciones, 'observaciones');
+    const tipoDocumento = this.normalizeNullableOptionalText(dto.tipoDocumento, 'tipoDocumento');
+    const numeroDocumento = this.normalizeNullableOptionalText(
+      dto.numeroDocumento,
+      'numeroDocumento',
+    );
+    const observaciones = this.normalizeNullableOptionalText(
+      dto.observaciones,
+      'observaciones',
+    );
 
     try {
       return await this.withUserContext(userId, async (tx) => {
-        const tenant = await tx.tenants.create({
-          data: {
-            nombre,
-            tipo_documento: tipoDocumento,
-            numero_documento: numeroDocumento,
-            estado: dto.estado ?? 'ACTIVO',
-            observaciones,
-            owner_user_id: userId,
-          },
-          select: this.tenantSelect(),
-        });
-
-        await tx.tenant_users.create({
-          data: {
-            id_tenant: tenant.id_tenant,
-            id_user: userId,
-            role: 'OWNER',
-            estado: 'ACTIVO',
-            invited_by: null,
-          },
-        });
+        const rows = await tx.$queryRaw<{ id_tenant: bigint }[]>(
+          Prisma.sql`
+            SELECT public.create_tenant(
+              ${nombre},
+              ${tipoDocumento},
+              ${numeroDocumento},
+              ${observaciones}
+            ) AS id_tenant
+          `,
+        );
+        const tenantId = rows[0]?.id_tenant;
+        if (!tenantId) {
+          throw new BadRequestException('No se pudo crear el tenant.');
+        }
 
         await tx.$executeRaw(
-          Prisma.sql`SELECT set_config('app.tenant_id', ${tenant.id_tenant.toString()}, true)`,
+          Prisma.sql`SELECT set_config('app.tenant_id', ${tenantId.toString()}, true)`,
         );
 
-        await this.seedTenantBaseCatalogs(tx, tenant.id_tenant);
-
+        const tenant = await this.findTenantById(tx, tenantId);
         return this.toResponse(tenant);
       });
     } catch (error) {
       this.handleKnownErrors(error);
+      this.handleFunctionErrors(error);
       throw error;
     }
   }
@@ -106,7 +116,8 @@ export class TenantsService {
 
   async update(id: bigint, dto: UpdateTenantDto, userId: bigint): Promise<TenantResponseDto> {
     this.ensureEstadoIsValid(dto.estado);
-    const nombre = this.normalizeOptionalText(dto.nombre, 'nombre');
+    const nombre =
+      dto.nombre !== undefined ? this.normalizeRequiredText(dto.nombre, 'nombre') : undefined;
     const tipoDocumento = this.normalizeNullableOptionalText(dto.tipoDocumento, 'tipoDocumento');
     const numeroDocumento = this.normalizeNullableOptionalText(
       dto.numeroDocumento,
@@ -118,44 +129,35 @@ export class TenantsService {
     );
 
     try {
-      const tenant = await this.withUserContext(userId, async (tx) => {
-        await this.ensureOwnerAccess(tx, id, userId);
-
-        return tx.tenants.update({
+      const tenant = await this.withTenantContext(userId, id, (tx) =>
+        tx.tenants.update({
           select: this.tenantSelect(),
           where: { id_tenant: id },
           data: {
-            nombre: nombre ?? undefined,
+            nombre,
             tipo_documento: tipoDocumento,
             numero_documento: numeroDocumento,
             estado: dto.estado,
             observaciones,
-            updated_at: new Date(),
           },
-        });
-      });
+        }),
+      );
 
       return this.toResponse(tenant);
     } catch (error) {
       this.handleKnownErrors(error);
+      this.handleFunctionErrors(error);
       throw error;
     }
   }
 
   async remove(id: bigint, userId: bigint): Promise<void> {
     try {
-      await this.withUserContext(userId, async (tx) => {
-        await this.ensureOwnerAccess(tx, id, userId);
-
-        await tx.tenants.update({
-          where: { id_tenant: id },
-          data: {
-            estado: 'INACTIVO',
-            updated_at: new Date(),
-          },
-        });
-      });
+      await this.withTenantContext(userId, id, (tx) =>
+        tx.$queryRaw(Prisma.sql`SELECT public.enviar_tenant_a_papelera(${id})`),
+      );
     } catch (error) {
+      this.handleFunctionErrors(error);
       this.handleKnownErrors(error);
       throw error;
     }
@@ -163,20 +165,18 @@ export class TenantsService {
 
   async removePermanent(id: bigint, userId: bigint): Promise<void> {
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.$executeRaw(
-          Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
-        );
-        await tx.$executeRaw(
-          Prisma.sql`SELECT set_config('app.tenant_id', ${id.toString()}, true)`,
-        );
-
-        await this.ensureOwnerAccess(tx, id, userId);
-
-        await tx.$queryRaw(Prisma.sql`SELECT fn_delete_tenant(${id}, ${userId})`);
-      });
+      await this.withTenantContext(userId, id, (tx) =>
+        tx.$queryRaw(
+          Prisma.sql`
+            SELECT public.eliminar_tenant_definitivamente(
+              ${id},
+              ${'ELIMINAR DEFINITIVAMENTE'}
+            )
+          `,
+        ),
+      );
     } catch (error) {
-      this.handleDeleteTenantFunctionError(error);
+      this.handleFunctionErrors(error);
       this.handleKnownErrors(error);
       throw error;
     }
@@ -201,42 +201,36 @@ export class TenantsService {
     });
   }
 
-  private async seedTenantBaseCatalogs(
+  private async withTenantContext<T>(
+    userId: bigint,
+    tenantId: bigint,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
+      );
+      await tx.$executeRaw(
+        Prisma.sql`SELECT set_config('app.tenant_id', ${tenantId.toString()}, true)`,
+      );
+      return fn(tx);
+    });
+  }
+
+  private async findTenantById(
     tx: Prisma.TransactionClient,
     tenantId: bigint,
-  ): Promise<void> {
-    const [conceptosBase, categoriasBase] = await Promise.all([
-      tx.conceptos_cobro_base.findMany({
-        orderBy: { id_concepto_cobro_base: 'asc' },
-      }),
-      tx.caja_categorias_base.findMany({
-        orderBy: { id_categoria_caja_base: 'asc' },
-      }),
-    ]);
+  ): Promise<TenantWithOwner> {
+    const tenant = await tx.tenants.findUnique({
+      select: this.tenantSelect(),
+      where: { id_tenant: tenantId },
+    });
 
-    if (conceptosBase.length > 0) {
-      await tx.conceptos_cobro.createMany({
-        data: conceptosBase.map((concepto) => ({
-          id_tenant: tenantId,
-          nombre: concepto.nombre,
-          tipo: concepto.tipo,
-          activo: concepto.activo,
-          requiere_periodo: concepto.requiere_periodo,
-          observaciones: concepto.observaciones,
-        })),
-      });
+    if (!tenant) {
+      throw new NotFoundException('No se encontro el tenant creado.');
     }
 
-    if (categoriasBase.length > 0) {
-      await tx.caja_categorias.createMany({
-        data: categoriasBase.map((categoria) => ({
-          id_tenant: tenantId,
-          nombre: categoria.nombre,
-          tipo: categoria.tipo,
-          activo: categoria.activo,
-        })),
-      });
-    }
+    return tenant;
   }
 
   private normalizeSkip(skip?: number): number {
@@ -263,17 +257,15 @@ export class TenantsService {
     if (estado === undefined) {
       return;
     }
-    if (estado !== 'ACTIVO' && estado !== 'INACTIVO') {
-      throw new BadRequestException('estado solo admite ACTIVO o INACTIVO.');
+    if (estado !== 'ACTIVO' && estado !== 'INACTIVO' && estado !== 'SUSPENDIDO') {
+      throw new BadRequestException('estado solo admite ACTIVO, INACTIVO o SUSPENDIDO.');
     }
   }
 
   private handleKnownErrors(error: unknown): void {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        throw new ConflictException(
-          'Ya existe un tenant con ese nombre para el owner actual.',
-        );
+        throw new ConflictException('Ya existe un registro que viola una regla unica.');
       }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro el tenant solicitado.');
@@ -281,42 +273,18 @@ export class TenantsService {
     }
   }
 
-  private handleDeleteTenantFunctionError(error: unknown): void {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError ||
-      error instanceof Prisma.PrismaClientUnknownRequestError
-    ) {
-      const message = error.message ?? '';
-
-      if (message.includes('Solo el OWNER puede eliminar el tenant')) {
-        throw new ForbiddenException(
-          'Solo el owner del tenant puede eliminarlo definitivamente.',
-        );
+  private handleFunctionErrors(error: unknown): void {
+    if (error instanceof Error) {
+      const message = error.message;
+      if (message.includes('correo verificado')) {
+        throw new ForbiddenException('El usuario debe estar activo y tener el correo verificado.');
       }
-    }
-  }
-
-  private async ensureOwnerAccess(
-    tx: Prisma.TransactionClient,
-    id: bigint,
-    userId: bigint,
-  ): Promise<void> {
-    const tenant = await tx.tenants.findUnique({
-      where: { id_tenant: id },
-      select: {
-        id_tenant: true,
-        owner_user_id: true,
-      },
-    });
-
-    if (!tenant) {
-      throw new NotFoundException(`No existe tenant con id ${id.toString()}`);
-    }
-
-    if (tenant.owner_user_id !== userId) {
-      throw new ForbiddenException(
-        'Solo el owner del tenant puede actualizarlo o eliminarlo.',
-      );
+      if (message.includes('OWNER') || message.includes('permiso')) {
+        throw new ForbiddenException('No tiene permisos suficientes para esta operacion.');
+      }
+      if (message.includes('no existe') || message.includes('no encontrado')) {
+        throw new NotFoundException('No se encontro el tenant solicitado.');
+      }
     }
   }
 
@@ -329,7 +297,16 @@ export class TenantsService {
       estado: true,
       created_at: true,
       observaciones: true,
-      owner_user_id: true,
+      tenant_users: {
+        where: {
+          role: 'OWNER',
+          estado: 'ACTIVO',
+        },
+        select: {
+          id_user: true,
+        },
+        take: 1,
+      },
     } satisfies Prisma.tenantsSelect;
   }
 
@@ -341,7 +318,7 @@ export class TenantsService {
     return normalized || undefined;
   }
 
-  private normalizeOptionalText(
+  private normalizeNullableOptionalText(
     value: string | null | undefined,
     field: string,
   ): string | null | undefined {
@@ -352,13 +329,6 @@ export class TenantsService {
       return null;
     }
     return this.normalizeRequiredText(value, field);
-  }
-
-  private normalizeNullableOptionalText(
-    value: string | null | undefined,
-    field: string,
-  ): string | null | undefined {
-    return this.normalizeOptionalText(value, field);
   }
 
   private normalizeRequiredText(value: string, field: string): string {
@@ -372,16 +342,8 @@ export class TenantsService {
     return normalized;
   }
 
-  private toResponse(tenant: {
-    id_tenant: bigint;
-    nombre: string;
-    tipo_documento: string | null;
-    numero_documento: string | null;
-    estado: string;
-    created_at: Date;
-    observaciones: string | null;
-    owner_user_id: bigint;
-  }): TenantResponseDto {
+  private toResponse(tenant: TenantWithOwner): TenantResponseDto {
+    const owner = tenant.tenant_users[0];
     return {
       idTenant: Number(tenant.id_tenant),
       nombre: tenant.nombre,
@@ -390,7 +352,7 @@ export class TenantsService {
       estado: tenant.estado,
       createdAt: tenant.created_at,
       observaciones: tenant.observaciones,
-      ownerUserId: Number(tenant.owner_user_id),
+      ownerUserId: owner ? Number(owner.id_user) : null,
     };
   }
 }

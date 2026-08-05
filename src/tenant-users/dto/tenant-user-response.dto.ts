@@ -17,9 +17,6 @@ export class TenantUserResponseDto {
   joinedAt: Date;
 
   @ApiPropertyOptional({ nullable: true })
-  acceptedAt: Date | null;
-
-  @ApiPropertyOptional({ nullable: true })
   endedAt: Date | null;
 
   @ApiPropertyOptional({ nullable: true })

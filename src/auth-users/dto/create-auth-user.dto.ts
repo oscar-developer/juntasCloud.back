@@ -33,10 +33,10 @@ export class CreateAuthUserDto {
   @MinLength(1)
   clave!: string;
 
-  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO'], default: 'ACTIVO' })
+  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO', 'BLOQUEADO'], default: 'ACTIVO' })
   @IsOptional()
-  @IsIn(['ACTIVO', 'INACTIVO'])
-  estado?: 'ACTIVO' | 'INACTIVO';
+  @IsIn(['ACTIVO', 'INACTIVO', 'BLOQUEADO'])
+  estado?: 'ACTIVO' | 'INACTIVO' | 'BLOQUEADO';
 
   @ApiPropertyOptional({ example: false, default: false })
   @IsOptional()

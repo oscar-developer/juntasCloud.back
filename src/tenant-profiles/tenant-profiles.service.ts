@@ -22,12 +22,11 @@ type TenantProfileRecord = {
   id_profile: bigint;
   nombre: string;
   descripcion: string | null;
-  activo: boolean;
+  estado: boolean;
   tenant_profile_modules?: { access_level: string }[];
 };
 
 type TenantProfileModuleRecord = {
-  id_tenant: bigint;
   id_profile: bigint;
   module_code: string;
   access_level: string;
@@ -36,7 +35,7 @@ type TenantProfileModuleRecord = {
     nombre: string;
     grupo: string;
     orden: number;
-    activo: boolean;
+    estado: boolean;
   };
 };
 
@@ -68,14 +67,13 @@ export class TenantProfilesService {
             id_tenant: tenantId,
             nombre,
             descripcion,
-            activo: dto.activo ?? true,
+            estado: dto.activo ?? true,
           },
         });
 
         if (modules.length > 0) {
           await tx.tenant_profile_modules.createMany({
             data: modules.map((module) => ({
-              id_tenant: tenantId,
               id_profile: profile.id_profile,
               module_code: module.moduleCode,
               access_level: module.accessLevel,
@@ -104,7 +102,7 @@ export class TenantProfilesService {
       const limit = query.limit ?? 20;
       const where: Prisma.tenant_profilesWhereInput = {
         id_tenant: tenantId,
-        activo: query.activo,
+        estado: query.activo,
         OR: search
           ? [
               { nombre: { contains: search, mode: 'insensitive' } },
@@ -172,7 +170,7 @@ export class TenantProfilesService {
           data: {
             nombre,
             descripcion,
-            activo: dto.activo,
+            estado: dto.activo,
           },
         });
 
@@ -209,7 +207,6 @@ export class TenantProfilesService {
       try {
         await tx.tenant_profile_modules.deleteMany({
           where: {
-            id_tenant: tenantId,
             id_profile: profileId,
           },
         });
@@ -239,14 +236,13 @@ export class TenantProfilesService {
 
       const modules = await tx.tenant_profile_modules.findMany({
         where: {
-          id_tenant: tenantId,
           id_profile: profileId,
         },
         include: { app_modules: true },
         orderBy: [{ app_modules: { orden: 'asc' } }, { module_code: 'asc' }],
       });
 
-      return modules.map((module) => this.toModuleResponse(module));
+      return modules.map((module) => this.toModuleResponse(module, tenantId));
     });
   }
 
@@ -265,7 +261,6 @@ export class TenantProfilesService {
       try {
         await tx.tenant_profile_modules.deleteMany({
           where: {
-            id_tenant: tenantId,
             id_profile: profileId,
           },
         });
@@ -273,7 +268,6 @@ export class TenantProfilesService {
         if (modules.length > 0) {
           await tx.tenant_profile_modules.createMany({
             data: modules.map((module) => ({
-              id_tenant: tenantId,
               id_profile: profileId,
               module_code: module.moduleCode,
               access_level: module.accessLevel,
@@ -283,7 +277,7 @@ export class TenantProfilesService {
 
         const savedModules = await this.findProfileModules(tx, tenantId, profileId);
 
-        return savedModules.map((module) => this.toModuleResponse(module));
+        return savedModules.map((module) => this.toModuleResponse(module, tenantId));
       } catch (error) {
         this.handleKnownErrors(error);
         throw error;
@@ -415,12 +409,11 @@ export class TenantProfilesService {
 
   private async findProfileModules(
     tx: Prisma.TransactionClient,
-    tenantId: bigint,
+    _tenantId: bigint,
     profileId: bigint,
   ): Promise<TenantProfileModuleRecord[]> {
     return tx.tenant_profile_modules.findMany({
       where: {
-        id_tenant: tenantId,
         id_profile: profileId,
       },
       include: { app_modules: true },
@@ -430,7 +423,7 @@ export class TenantProfilesService {
 
   private async hasFullAccessToAdminRoles(
     tx: Prisma.TransactionClient,
-    tenantId: bigint,
+    _tenantId: bigint,
     profileId: bigint | null,
   ): Promise<boolean> {
     if (!profileId) {
@@ -439,8 +432,7 @@ export class TenantProfilesService {
 
     const permission = await tx.tenant_profile_modules.findUnique({
       where: {
-        id_tenant_id_profile_module_code: {
-          id_tenant: tenantId,
+        id_profile_module_code: {
           id_profile: profileId,
           module_code: 'admin_roles',
         },
@@ -600,7 +592,7 @@ export class TenantProfilesService {
       idProfile: Number(profile.id_profile),
       nombre: profile.nombre,
       descripcion: profile.descripcion,
-      activo: profile.activo,
+      activo: profile.estado,
       createdAt: null,
       updatedAt: null,
       totalModules: countModules.length,
@@ -609,21 +601,22 @@ export class TenantProfilesService {
         .length,
       totalNoAccess: countModules.filter((module) => module.access_level === 'SIN_ACCESO')
         .length,
-      modules: modules?.map((module) => this.toModuleResponse(module)),
+      modules: modules?.map((module) => this.toModuleResponse(module, profile.id_tenant)),
     };
   }
 
   private toModuleResponse(
     module: TenantProfileModuleRecord,
+    tenantId: bigint,
   ): TenantProfileModuleResponseDto {
     return {
-      idTenant: Number(module.id_tenant),
+      idTenant: Number(tenantId),
       idProfile: Number(module.id_profile),
       moduleCode: module.module_code,
       nombre: module.app_modules.nombre,
       grupo: module.app_modules.grupo,
       orden: module.app_modules.orden,
-      activo: module.app_modules.activo,
+      activo: module.app_modules.estado,
       accessLevel: module.access_level,
     };
   }

@@ -8,10 +8,10 @@ export class QueryAuthUsersDto {
   @IsString()
   email?: string;
 
-  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiPropertyOptional({ enum: ['ACTIVO', 'INACTIVO', 'BLOQUEADO'] })
   @IsOptional()
-  @IsIn(['ACTIVO', 'INACTIVO'])
-  estado?: 'ACTIVO' | 'INACTIVO';
+  @IsIn(['ACTIVO', 'INACTIVO', 'BLOQUEADO'])
+  estado?: 'ACTIVO' | 'INACTIVO' | 'BLOQUEADO';
 
   @ApiPropertyOptional({ default: 0, minimum: 0 })
   @IsOptional()

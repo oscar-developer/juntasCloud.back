@@ -13,7 +13,7 @@ export class TenantResponseDto {
   @ApiProperty({ type: String, nullable: true, example: '20123456789' })
   numeroDocumento!: string | null;
 
-  @ApiProperty({ enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiProperty({ enum: ['ACTIVO', 'INACTIVO', 'SUSPENDIDO'] })
   estado!: string;
 
   @ApiProperty({ example: '2026-02-24T14:00:00.000Z' })

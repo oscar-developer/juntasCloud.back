@@ -55,6 +55,7 @@ describe('CajaCategoriasService', () => {
     expect(tx.caja_categorias.create).toHaveBeenCalledWith({
       data: {
         id_tenant: 2n,
+        cod_categoria: expect.stringMatching(/^CAT_CUOTAS_/),
         nombre: 'Cuotas',
         tipo: 'INGRESO',
         activo: true,

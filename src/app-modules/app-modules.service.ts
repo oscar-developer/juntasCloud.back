@@ -7,7 +7,7 @@ type AppModuleRecord = {
   nombre: string;
   grupo: string;
   orden: number;
-  activo: boolean;
+  estado: boolean;
 };
 
 @Injectable()
@@ -28,7 +28,7 @@ export class AppModulesService {
       nombre: module.nombre,
       grupo: module.grupo,
       orden: module.orden,
-      activo: module.activo,
+      activo: module.estado,
     };
   }
 }

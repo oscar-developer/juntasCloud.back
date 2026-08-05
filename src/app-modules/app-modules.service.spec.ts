@@ -26,7 +26,7 @@ describe('AppModulesService', () => {
         nombre: 'Personas',
         grupo: 'Padron',
         orden: 10,
-        activo: true,
+        estado: true,
       },
     ]);
 

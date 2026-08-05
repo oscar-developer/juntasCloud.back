@@ -65,8 +65,8 @@ model asistencia_asamblea {
   tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea00")
   auth_users_asistencia_asamblea_updated_by_userToauth_users auth_users? @relation("asistencia_asamblea_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_asistencia_asamblea_updated_by")
 
-  @@unique([id_tenant, id_asistencia])
   @@unique([id_tenant, id_asamblea, id_persona], map: "ux_asistencia_asamblea")
+  @@unique([id_tenant, id_asistencia])
   @@index([id_tenant, id_asamblea], map: "inx_asistencia_asamblea_asamblea")
   @@index([id_tenant, estado], map: "inx_asistencia_asamblea_estado")
   @@index([id_tenant, id_persona], map: "inx_asistencia_asamblea_persona")
@@ -227,8 +227,8 @@ model faena_participacion {
   tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion00")
   auth_users_faena_participacion_updated_by_userToauth_users auth_users? @relation("faena_participacion_updated_by_userToauth_users", fields: [updated_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_faena_participacion_updated_by")
 
-  @@unique([id_tenant, id_faena_participacion])
   @@unique([id_tenant, id_faena, id_persona], map: "ux_faena_participacion")
+  @@unique([id_tenant, id_faena_participacion])
   @@index([id_tenant, estado], map: "inx_fp_estado")
   @@index([id_tenant, id_faena], map: "inx_fp_faena")
   @@index([id_tenant, id_persona], map: "inx_fp_persona")
@@ -275,8 +275,8 @@ model junta_miembros {
   juntas_directivas juntas_directivas @relation(fields: [id_tenant, id_junta], references: [id_tenant, id_junta], onDelete: NoAction, onUpdate: NoAction, map: "fk_junta_miembros01")
   personas          personas          @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: NoAction, onUpdate: NoAction, map: "fk_junta_miembros02")
 
-  @@unique([id_tenant, id_junta_miembro])
   @@unique([id_tenant, id_junta, cargo], map: "ux_junta_presidente_activo", where: raw("(((cargo)::text = 'PRESIDENTE'::text) AND (fecha_fin IS NULL))"))
+  @@unique([id_tenant, id_junta_miembro])
   @@index([id_tenant, id_junta], map: "inx_junta_miembros_junta")
   @@index([id_tenant, id_persona], map: "inx_junta_miembros_persona")
 }
@@ -315,8 +315,8 @@ model persona_terreno {
   tenants                  tenants  @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_terreno00")
   terrenos                 terrenos @relation(fields: [id_tenant, id_terreno], references: [id_tenant, id_terreno], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_terreno02")
 
-  @@unique([id_tenant, id_persona_terreno])
   @@unique([id_tenant, id_persona, id_terreno], map: "ux_persona_terreno")
+  @@unique([id_tenant, id_persona_terreno])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -407,6 +407,7 @@ model tenant_users {
 
   @@id([id_tenant, id_user], map: "pk_tenant_users")
   @@unique([id_tenant, id_persona], map: "ux_tenant_users_persona", where: raw("(id_persona IS NOT NULL)"))
+  @@index([id_tenant], map: "ux_tenant_users_one_active_owner", where: raw("(((role)::text = 'OWNER'::text) AND ((estado)::text = 'ACTIVO'::text))"))
   @@index([id_tenant, role, estado], map: "ix_tenant_users_tenant_role_estado")
   @@index([id_user, estado], map: "ix_tenant_users_user_estado")
 }
@@ -561,8 +562,8 @@ model credito_movimientos {
   creditos_persona      creditos_persona @relation(fields: [id_tenant, id_credito], references: [id_tenant, id_credito], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_credito")
   tenants               tenants          @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_tenant")
 
-  @@unique([id_tenant, id_credito_movimiento])
   @@index([id_tenant, id_credito, fecha_movimiento], map: "inx_crm_credito_fecha")
+  @@unique([id_tenant, id_credito_movimiento])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -630,8 +631,8 @@ model obligacion_movimientos {
   obligaciones_persona     obligaciones_persona @relation(fields: [id_tenant, id_obligacion], references: [id_tenant, id_obligacion], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_obligacion")
   tenants                  tenants              @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_tenant")
 
-  @@unique([id_tenant, id_obligacion_movimiento])
   @@index([id_tenant, id_obligacion, fecha_movimiento], map: "inx_om_obligacion_fecha")
+  @@unique([id_tenant, id_obligacion_movimiento])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -649,8 +650,8 @@ model obligacion_pagos {
   obligaciones_persona obligaciones_persona @relation(fields: [id_tenant, id_obligacion], references: [id_tenant, id_obligacion], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_obligacion")
   tenants              tenants              @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_tenant")
 
-  @@unique([id_tenant, id_obligacion_pago])
   @@index([id_tenant, id_movimiento], map: "inx_obp_movimiento")
+  @@unique([id_tenant, id_obligacion_pago])
   @@index([id_tenant, id_obligacion], map: "inx_obp_obligacion")
 }
 

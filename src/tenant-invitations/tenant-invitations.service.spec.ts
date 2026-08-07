@@ -103,7 +103,6 @@ describe('TenantInvitationsService', () => {
     const token = 'accepted-token';
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const tx = baseTx({
-      $queryRaw: jest.fn().mockResolvedValue([{ id_tenant: 2n }]),
       tenant_invitations: {
         findUnique: jest.fn().mockResolvedValue(
           invitation({
@@ -117,7 +116,8 @@ describe('TenantInvitationsService', () => {
 
     const result = await service.accept(token, 5n);
 
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
     expect(tx.tenant_invitations.findUnique).toHaveBeenCalledWith({
       where: { token_hash: tokenHash },
     });
@@ -127,7 +127,6 @@ describe('TenantInvitationsService', () => {
 
   it('reject procesa por token y devuelve estado REJECTED', async () => {
     const tx = baseTx({
-      $queryRaw: jest.fn().mockResolvedValue([{ ok: true }]),
       tenant_invitations: {
         findUnique: jest.fn().mockResolvedValue(
           invitation({
@@ -141,16 +140,18 @@ describe('TenantInvitationsService', () => {
 
     const result = await service.reject('reject-token', 5n);
 
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
     expect(result.status).toBe('REJECTED');
     expect(result.rejectedAt).toBeInstanceOf(Date);
   });
 
   it('traduce error de correo ajeno a ForbiddenException', async () => {
     const tx = baseTx({
-      $queryRaw: jest
+      $executeRaw: jest
         .fn()
-        .mockRejectedValue(new Error('La invitación corresponde a otro correo electrónico')),
+        .mockResolvedValueOnce(1)
+        .mockRejectedValueOnce(new Error('La invitación corresponde a otro correo electrónico')),
     });
     runWithTx(tx);
 

@@ -154,7 +154,7 @@ export class TenantsService {
   async remove(id: bigint, userId: bigint): Promise<void> {
     try {
       await this.withTenantContext(userId, id, (tx) =>
-        tx.$queryRaw(Prisma.sql`SELECT public.enviar_tenant_a_papelera(${id})`),
+        tx.$executeRaw(Prisma.sql`SELECT public.enviar_tenant_a_papelera(${id})`),
       );
     } catch (error) {
       this.handleFunctionErrors(error);
@@ -166,7 +166,7 @@ export class TenantsService {
   async removePermanent(id: bigint, userId: bigint): Promise<void> {
     try {
       await this.withTenantContext(userId, id, (tx) =>
-        tx.$queryRaw(
+        tx.$executeRaw(
           Prisma.sql`
             SELECT public.eliminar_tenant_definitivamente(
               ${id},

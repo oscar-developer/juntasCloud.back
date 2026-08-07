@@ -112,7 +112,7 @@ export class TenantInvitationsService {
 
     try {
       return await this.withUserContext(userId, async (tx) => {
-        await tx.$queryRaw(
+        await tx.$executeRaw(
           Prisma.sql`SELECT public.accept_tenant_invitation(${normalizedToken})`,
         );
         const invitation = await this.getInvitationByTokenHashOrThrow(tx, tokenHash);
@@ -134,7 +134,7 @@ export class TenantInvitationsService {
 
     try {
       return await this.withUserContext(userId, async (tx) => {
-        await tx.$queryRaw(
+        await tx.$executeRaw(
           Prisma.sql`SELECT public.reject_tenant_invitation(${normalizedToken})`,
         );
         const invitation = await this.getInvitationByTokenHashOrThrow(tx, tokenHash);

@@ -116,18 +116,22 @@ describe('TenantsService', () => {
   });
 
   it('remove usa funcion v4 para enviar tenant a papelera', async () => {
-    const tx = baseTx({ $queryRaw: jest.fn().mockResolvedValue([{ ok: true }]) });
+    const tx = baseTx();
     runWithTx(tx);
 
     await service.remove(2n, 77n);
 
-    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(3);
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('removePermanent traduce errores OWNER de la funcion SQL', async () => {
     const tx = baseTx({
-      $queryRaw: jest.fn().mockRejectedValue(new Error('Solamente el OWNER puede eliminar')),
+      $executeRaw: jest
+        .fn()
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(1)
+        .mockRejectedValueOnce(new Error('Solamente el OWNER puede eliminar')),
     });
     runWithTx(tx);
 
@@ -138,9 +142,11 @@ describe('TenantsService', () => {
 
   it('removePermanent traduce estado invalido de papelera a conflicto', async () => {
     const tx = baseTx({
-      $queryRaw: jest
+      $executeRaw: jest
         .fn()
-        .mockRejectedValue(
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(1)
+        .mockRejectedValueOnce(
           new Error(
             'El tenant debe estar en la papelera antes de eliminarse definitivamente',
           ),

@@ -1,13 +1,32 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantsService } from './tenants.service';
 
 describe('TenantsService', () => {
   let service: TenantsService;
-  let prisma: { $transaction: jest.Mock };
+  let prisma: {
+    $transaction: jest.Mock;
+    withUserContext: jest.Mock;
+    withTenantContext: jest.Mock;
+  };
 
   beforeEach(() => {
-    prisma = { $transaction: jest.fn() };
+    prisma = {
+      $transaction: jest.fn(),
+      withUserContext: jest.fn((_userId, fn) =>
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw?.();
+          return fn(tx);
+        }),
+      ),
+      withTenantContext: jest.fn((_userId, _tenantId, fn) =>
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw?.();
+          await tx.$executeRaw?.();
+          return fn(tx);
+        }),
+      ),
+    };
     service = new TenantsService(prisma as unknown as PrismaService);
   });
 
@@ -114,6 +133,23 @@ describe('TenantsService', () => {
 
     await expect(service.removePermanent(2n, 77n)).rejects.toBeInstanceOf(
       ForbiddenException,
+    );
+  });
+
+  it('removePermanent traduce estado invalido de papelera a conflicto', async () => {
+    const tx = baseTx({
+      $queryRaw: jest
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'El tenant debe estar en la papelera antes de eliminarse definitivamente',
+          ),
+        ),
+    });
+    runWithTx(tx);
+
+    await expect(service.removePermanent(2n, 77n)).rejects.toBeInstanceOf(
+      ConflictException,
     );
   });
 });

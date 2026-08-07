@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -18,6 +18,46 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleDestroy() {
     await this.$disconnect();
+  }
+
+  async withUserContext<T>(
+    userId: bigint,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.$transaction(async (tx) => {
+      await this.setUserContext(tx, userId);
+      return fn(tx);
+    });
+  }
+
+  async withTenantContext<T>(
+    userId: bigint,
+    tenantId: bigint,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.$transaction(async (tx) => {
+      await this.setUserContext(tx, userId);
+      await this.setTenantContext(tx, tenantId);
+      return fn(tx);
+    });
+  }
+
+  private async setUserContext(
+    tx: Prisma.TransactionClient,
+    userId: bigint,
+  ): Promise<void> {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
+    );
+  }
+
+  private async setTenantContext(
+    tx: Prisma.TransactionClient,
+    tenantId: bigint,
+  ): Promise<void> {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT set_config('app.tenant_id', ${tenantId.toString()}, true)`,
+    );
   }
 
   private static buildConnectionString(): string {

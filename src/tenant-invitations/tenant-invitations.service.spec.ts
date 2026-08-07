@@ -6,11 +6,30 @@ import { TenantInvitationsService } from './tenant-invitations.service';
 
 describe('TenantInvitationsService', () => {
   let service: TenantInvitationsService;
-  let prisma: { $transaction: jest.Mock };
+  let prisma: {
+    $transaction: jest.Mock;
+    withUserContext: jest.Mock;
+    withTenantContext: jest.Mock;
+  };
   let mailService: { sendTenantInvitation: jest.Mock };
 
   beforeEach(() => {
-    prisma = { $transaction: jest.fn() };
+    prisma = {
+      $transaction: jest.fn(),
+      withUserContext: jest.fn((_userId, fn) =>
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw?.();
+          return fn(tx);
+        }),
+      ),
+      withTenantContext: jest.fn((_userId, _tenantId, fn) =>
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw?.();
+          await tx.$executeRaw?.();
+          return fn(tx);
+        }),
+      ),
+    };
     mailService = { sendTenantInvitation: jest.fn().mockResolvedValue(undefined) };
     service = new TenantInvitationsService(
       prisma as unknown as PrismaService,

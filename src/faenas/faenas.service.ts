@@ -77,9 +77,7 @@ export class FaenasService {
   }
   parseId(id: string) { if (!/^\d+$/.test(id)) throw new BadRequestException('idFaena debe ser un entero positivo.'); return BigInt(id); }
   private async ctx<T>(userId: bigint, tenantId: bigint, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`);
-      await tx.$executeRaw(Prisma.sql`SELECT set_config('app.tenant_id', ${tenantId.toString()}, true)`);
+    return this.prisma.withTenantContext(userId, tenantId, async (tx) => {
       const m = await tx.tenant_users.findFirst({ where: { id_tenant: tenantId, id_user: userId, estado: 'ACTIVO' }, select: { id_user: true } });
       if (!m) throw new ForbiddenException('El usuario no pertenece al tenant activo.');
       return fn(tx);

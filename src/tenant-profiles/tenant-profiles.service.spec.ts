@@ -4,10 +4,13 @@ import { TenantProfilesService } from './tenant-profiles.service';
 
 describe('TenantProfilesService', () => {
   let service: TenantProfilesService;
-  let prisma: { $transaction: jest.Mock };
+  let prisma: { $transaction: jest.Mock; withTenantContext: jest.Mock };
 
   beforeEach(() => {
-    prisma = { $transaction: jest.fn() };
+    prisma = {
+      $transaction: jest.fn(),
+      withTenantContext: jest.fn((_userId, _tenantId, fn) => prisma.$transaction(fn)),
+    };
     service = new TenantProfilesService(prisma as unknown as PrismaService);
   });
 

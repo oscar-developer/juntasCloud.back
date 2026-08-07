@@ -11,11 +11,19 @@ describe('CajaCategoriasService', () => {
   let service: CajaCategoriasService;
   let prisma: {
     $transaction: jest.Mock;
+    withTenantContext: jest.Mock;
   };
 
   beforeEach(() => {
     prisma = {
       $transaction: jest.fn(),
+      withTenantContext: jest.fn((_userId, _tenantId, fn) =>
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw?.();
+          await tx.$executeRaw?.();
+          return fn(tx);
+        }),
+      ),
     };
 
     service = new CajaCategoriasService(prisma as unknown as PrismaService);

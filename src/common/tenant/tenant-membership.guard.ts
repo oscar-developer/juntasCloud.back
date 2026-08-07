@@ -4,7 +4,6 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getUserIdFromRequest } from '../auth/get-user-id-from-request';
@@ -19,15 +18,10 @@ export class TenantMembershipGuard implements CanActivate {
     const tenantId = getTenantIdFromHeader(request);
     const userId = getUserIdFromRequest(request);
 
-    const membership = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(
-        Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
-      );
-      await tx.$executeRaw(
-        Prisma.sql`SELECT set_config('app.tenant_id', ${tenantId.toString()}, true)`,
-      );
-
-      return tx.tenant_users.findFirst({
+    const membership = await this.prisma.withTenantContext(
+      userId,
+      tenantId,
+      (tx) => tx.tenant_users.findFirst({
         where: {
           id_tenant: tenantId,
           id_user: userId,
@@ -36,8 +30,8 @@ export class TenantMembershipGuard implements CanActivate {
         select: {
           role: true,
         },
-      });
-    });
+      }),
+    );
 
     if (!membership) {
       throw new ForbiddenException('El usuario no pertenece al tenant activo.');

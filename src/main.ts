@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
 const { version: apiVersion } = JSON.parse(
   require('node:fs').readFileSync(
@@ -19,6 +20,7 @@ async function bootstrap() {
 
   // ✅ Prefijo global para TODA la API
   app.setGlobalPrefix('api');
+  app.useGlobalFilters(new PrismaExceptionFilter());
   const config = new DocumentBuilder()
     .setTitle('JuntasCloud API v4')
     .setDescription('Documentacion de endpoints para JuntasCloud API v4')

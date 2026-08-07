@@ -69,7 +69,7 @@ export class BienesService {
     });
   }
   parseId(id: string) { if (!/^\d+$/.test(id)) throw new BadRequestException('idBien debe ser un entero positivo.'); return BigInt(id); }
-  private async ctx<T>(u: bigint, t: bigint, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> { return this.prisma.$transaction(async (tx) => { await tx.$executeRaw(Prisma.sql`SELECT set_config('app.user_id', ${u.toString()}, true)`); await tx.$executeRaw(Prisma.sql`SELECT set_config('app.tenant_id', ${t.toString()}, true)`); const m = await tx.tenant_users.findFirst({ where: { id_tenant: t, id_user: u, estado: 'ACTIVO' }, select: { id_user: true } }); if (!m) throw new ForbiddenException('El usuario no pertenece al tenant activo.'); return fn(tx); }); }
+  private async ctx<T>(u: bigint, t: bigint, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> { return this.prisma.withTenantContext(u, t, async (tx) => { const m = await tx.tenant_users.findFirst({ where: { id_tenant: t, id_user: u, estado: 'ACTIVO' }, select: { id_user: true } }); if (!m) throw new ForbiddenException('El usuario no pertenece al tenant activo.'); return fn(tx); }); }
   private req(v: string, f: string) { const n = v?.trim(); if (!n) throw new BadRequestException(`${f} es obligatorio.`); return n; }
   private n(v?: string | null) { if (v === undefined || v === null) return null; const n = v.trim(); return n || null; }
   private on(v?: string | null) { if (v === undefined) return undefined; return this.n(v); }

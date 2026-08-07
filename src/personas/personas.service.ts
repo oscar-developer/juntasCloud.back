@@ -293,13 +293,7 @@ export class PersonasService {
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        await tx.$executeRaw(
-          Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
-        );
-        await tx.$executeRaw(
-          Prisma.sql`SELECT set_config('app.tenant_id', ${tenantId.toString()}, true)`,
-        );
+      return await this.prisma.withTenantContext(userId, tenantId, async (tx) => {
         await this.getTenantMembershipOrThrow(tx, tenantId, userId);
         return fn(tx);
       });

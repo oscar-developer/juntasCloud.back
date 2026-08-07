@@ -193,12 +193,7 @@ export class TenantsService {
     userId: bigint,
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(
-        Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
-      );
-      return fn(tx);
-    });
+    return this.prisma.withUserContext(userId, fn);
   }
 
   private async withTenantContext<T>(
@@ -206,15 +201,7 @@ export class TenantsService {
     tenantId: bigint,
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(
-        Prisma.sql`SELECT set_config('app.user_id', ${userId.toString()}, true)`,
-      );
-      await tx.$executeRaw(
-        Prisma.sql`SELECT set_config('app.tenant_id', ${tenantId.toString()}, true)`,
-      );
-      return fn(tx);
-    });
+    return this.prisma.withTenantContext(userId, tenantId, fn);
   }
 
   private async findTenantById(
@@ -281,6 +268,11 @@ export class TenantsService {
       }
       if (message.includes('OWNER') || message.includes('permiso')) {
         throw new ForbiddenException('No tiene permisos suficientes para esta operacion.');
+      }
+      if (message.includes('papelera')) {
+        throw new ConflictException(
+          'El tenant debe estar en la papelera antes de eliminarse definitivamente.',
+        );
       }
       if (message.includes('no existe') || message.includes('no encontrado')) {
         throw new NotFoundException('No se encontro el tenant solicitado.');

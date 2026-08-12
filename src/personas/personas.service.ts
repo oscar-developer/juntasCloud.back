@@ -24,13 +24,17 @@ export class PersonasService {
     return this.withTenantContext(userId, tenantId, async (tx) => {
       try {
         const fechaRegistro = this.normalizeDate(dto.fechaRegistro, 'fechaRegistro');
-        const fechaBaja = this.normalizeNullableDate(dto.fechaBaja, 'fechaBaja');
         const tipoParticipante = dto.tipoParticipante ?? 'NO_PADRONADO';
-        const estado = dto.estado ?? 'ACTIVO';
+        const estado = 'ACTIVO';
         const observaciones = this.normalizeNullableText(dto.observaciones);
+        const nroPadron =
+          tipoParticipante === 'PADRONADO'
+            ? await this.getNextNroPadron(tx, tenantId)
+            : null;
         const persona = await tx.personas.create({
           data: {
             id_tenant: tenantId,
+            nro_padron: nroPadron,
             nombres: this.normalizeRequiredText(dto.nombres, 'nombres'),
             apellido_paterno: this.normalizeRequiredText(dto.apellidoPaterno, 'apellidoPaterno'),
             apellido_materno: this.normalizeRequiredText(dto.apellidoMaterno, 'apellidoMaterno'),
@@ -42,7 +46,7 @@ export class PersonasService {
             tipo_participante: tipoParticipante,
             estado,
             fecha_registro: fechaRegistro,
-            fecha_baja: fechaBaja,
+            fecha_baja: null,
             observaciones,
           },
         });
@@ -91,7 +95,10 @@ export class PersonasService {
               ]
             : undefined,
         },
-        orderBy: { id_persona: 'desc' },
+        orderBy: [
+          { nro_padron: { sort: 'asc', nulls: 'last' } },
+          { id_persona: 'asc' },
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
       });
@@ -140,6 +147,7 @@ export class PersonasService {
           },
           select: {
             id_persona: true,
+            nro_padron: true,
             tipo_participante: true,
             estado: true,
             fecha_baja: true,
@@ -161,6 +169,13 @@ export class PersonasService {
           dto.observaciones !== undefined
             ? this.normalizeOptionalNullableText(dto.observaciones)
             : current.observaciones;
+        const nextNroPadron = await this.resolveNextNroPadron(
+          tx,
+          tenantId,
+          current.nro_padron,
+          nextTipoParticipante,
+          dto.nroPadron,
+        );
         const previousCondition = this.resolveCondition(current.estado, current.tipo_participante);
         const nextCondition = this.resolveCondition(nextEstado, nextTipoParticipante);
 
@@ -190,6 +205,8 @@ export class PersonasService {
             direccion: this.normalizeOptionalNullableText(dto.direccion),
             referencia_vivienda: this.normalizeOptionalNullableText(dto.referenciaVivienda),
             tipo_participante: dto.tipoParticipante,
+            nro_padron:
+              nextNroPadron !== current.nro_padron ? nextNroPadron : undefined,
             estado: dto.estado,
             fecha_registro:
               dto.fechaRegistro !== undefined
@@ -234,10 +251,7 @@ export class PersonasService {
             },
           },
           select: {
-            fecha_baja: true,
-            tipo_participante: true,
-            estado: true,
-            observaciones: true,
+            id_persona: true,
           },
         });
 
@@ -245,31 +259,20 @@ export class PersonasService {
           throw new NotFoundException('No se encontro la persona solicitada.');
         }
 
-        const fechaBaja = current.fecha_baja ?? this.today();
-        const previousCondition = this.resolveCondition(current.estado, current.tipo_participante);
+        await tx.persona_condiciones.deleteMany({
+          where: {
+            id_tenant: tenantId,
+            id_persona: idPersona,
+          },
+        });
 
-        const persona = await tx.personas.update({
+        const persona = await tx.personas.delete({
           where: {
             id_tenant_id_persona: {
               id_tenant: tenantId,
               id_persona: idPersona,
             },
           },
-          data: {
-            estado: 'RETIRADO',
-            fecha_baja: fechaBaja,
-            updated_at: new Date(),
-          },
-        });
-
-        await this.syncPersonaConditionHistory(tx, {
-          tenantId,
-          personaId: idPersona,
-          previousCondition,
-          nextCondition: 'RETIRADO',
-          effectiveDate: fechaBaja,
-          observaciones: current.observaciones,
-          userId,
         });
 
         return this.toResponse(persona);
@@ -285,6 +288,53 @@ export class PersonasService {
       throw new BadRequestException('idPersona debe ser un numero entero positivo.');
     }
     return BigInt(idPersona);
+  }
+
+  private async resolveNextNroPadron(
+    tx: Prisma.TransactionClient,
+    tenantId: bigint,
+    currentNroPadron: number | null,
+    tipoParticipante: string,
+    requestedNroPadron: number | null | undefined,
+  ): Promise<number | null> {
+    if (tipoParticipante !== 'PADRONADO') {
+      if (requestedNroPadron !== undefined && requestedNroPadron !== null) {
+        throw new BadRequestException(
+          'nroPadron solo puede registrarse cuando tipoParticipante es PADRONADO.',
+        );
+      }
+
+      return null;
+    }
+
+    if (requestedNroPadron !== undefined) {
+      if (requestedNroPadron === null) {
+        throw new BadRequestException(
+          'nroPadron es obligatorio cuando tipoParticipante es PADRONADO.',
+        );
+      }
+
+      return requestedNroPadron;
+    }
+
+    return currentNroPadron ?? this.getNextNroPadron(tx, tenantId);
+  }
+
+  private async getNextNroPadron(
+    tx: Prisma.TransactionClient,
+    tenantId: bigint,
+  ): Promise<number> {
+    const result = await tx.personas.aggregate({
+      where: {
+        id_tenant: tenantId,
+        nro_padron: { not: null },
+      },
+      _max: {
+        nro_padron: true,
+      },
+    });
+
+    return (result._max.nro_padron ?? 0) + 1;
   }
 
   private async withTenantContext<T>(
@@ -404,13 +454,6 @@ export class PersonasService {
     return new Date(
       Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()),
     );
-  }
-
-  private normalizeNullableDate(value: string | null | undefined, fieldName: string): Date | null {
-    if (value === undefined || value === null) {
-      return null;
-    }
-    return this.normalizeDate(value, fieldName);
   }
 
   private normalizeOptionalNullableDate(
@@ -540,17 +583,39 @@ export class PersonasService {
   private handleKnownErrors(error: unknown): void {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
+        const target = this.getUniqueConstraintTarget(error);
+
+        if (target.includes('nro_padron')) {
+          throw new ConflictException(
+            'No se pudo asignar el nro de padron porque ya existe en el tenant activo. Intente nuevamente.',
+          );
+        }
+
         throw new ConflictException('Ya existe una persona con ese DNI en el tenant activo.');
       }
       if (error.code === 'P2025') {
         throw new NotFoundException('No se encontro la persona solicitada.');
       }
+      if (error.code === 'P2003') {
+        throw new ConflictException(
+          'No se puede eliminar la persona porque tiene relaciones asociadas.',
+        );
+      }
     }
+  }
+
+  private getUniqueConstraintTarget(error: Prisma.PrismaClientKnownRequestError): string {
+    const target = error.meta?.target;
+    if (Array.isArray(target)) {
+      return target.join(',').toLowerCase();
+    }
+    return typeof target === 'string' ? target.toLowerCase() : '';
   }
 
   private toResponse(persona: {
     id_tenant: bigint;
     id_persona: bigint;
+    nro_padron: number | null;
     nombres: string;
     apellido_paterno: string;
     apellido_materno: string;
@@ -568,6 +633,7 @@ export class PersonasService {
     return {
       idTenant: Number(persona.id_tenant),
       idPersona: Number(persona.id_persona),
+      nroPadron: persona.nro_padron,
       nombres: persona.nombres,
       apellidoPaterno: persona.apellido_paterno,
       apellidoMaterno: persona.apellido_materno,

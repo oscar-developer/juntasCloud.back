@@ -3,6 +3,7 @@ import {
   Catch,
   ExceptionFilter,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
@@ -11,6 +12,7 @@ type ErrorBody = {
   statusCode: number;
   message: string;
   error: string;
+  details?: string;
 };
 
 type MappedError = {
@@ -32,6 +34,8 @@ const STATUS_LABELS: Record<number, string> = {
   Prisma.PrismaClientUnknownRequestError,
 )
 export class PrismaExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(PrismaExceptionFilter.name);
+
   catch(
     exception:
       | Prisma.PrismaClientKnownRequestError
@@ -47,6 +51,15 @@ export class PrismaExceptionFilter implements ExceptionFilter {
         STATUS_LABELS[mapped.statusCode] ??
         STATUS_LABELS[HttpStatus.INTERNAL_SERVER_ERROR],
     };
+
+    if (mapped.statusCode === HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(this.getLogMessage(exception), exception.stack);
+      const details = this.getDevelopmentDetails(exception);
+
+      if (details) {
+        body.details = details;
+      }
+    }
 
     response.status(mapped.statusCode).json(body);
   }
@@ -189,5 +202,47 @@ export class PrismaExceptionFilter implements ExceptionFilter {
   ): string | undefined {
     const value = source?.[key];
     return typeof value === 'string' ? value : undefined;
+  }
+
+  private getLogMessage(
+    exception:
+      | Prisma.PrismaClientKnownRequestError
+      | Prisma.PrismaClientUnknownRequestError,
+  ): string {
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      return `Prisma error no mapeado ${exception.code}: ${exception.message}`;
+    }
+
+    return `Prisma error desconocido: ${exception.message}`;
+  }
+
+  private getDevelopmentDetails(
+    exception:
+      | Prisma.PrismaClientKnownRequestError
+      | Prisma.PrismaClientUnknownRequestError,
+  ): string | undefined {
+    if (process.env.NODE_ENV === 'production') {
+      return undefined;
+    }
+
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      const cause = this.getObjectValue(
+        this.getObjectValue(exception.meta, 'driverAdapterError'),
+        'cause',
+      );
+      const databaseMessage =
+        this.getStringValue(cause, 'originalMessage') ??
+        this.getStringValue(cause, 'message');
+
+      if (databaseMessage) {
+        return this.sanitizeDevelopmentMessage(databaseMessage);
+      }
+    }
+
+    return this.sanitizeDevelopmentMessage(exception.message);
+  }
+
+  private sanitizeDevelopmentMessage(message: string): string {
+    return message.replace(/\s+/g, ' ').trim();
   }
 }

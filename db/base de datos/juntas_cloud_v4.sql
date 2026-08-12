@@ -1912,6 +1912,13 @@ WITH CHECK (
   AND public.can_admin_active_tenant(id_tenant)
 );
 
+CREATE POLICY personas_delete ON public.personas
+FOR DELETE
+USING (
+  id_tenant = public.app_current_tenant_id()
+  AND public.can_admin_active_tenant(id_tenant)
+);
+
 
 ALTER TABLE public.persona_condiciones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.persona_condiciones FORCE ROW LEVEL SECURITY;
@@ -1937,6 +1944,13 @@ USING (
   AND public.can_admin_active_tenant(id_tenant)
 )
 WITH CHECK (
+  id_tenant = public.app_current_tenant_id()
+  AND public.can_admin_active_tenant(id_tenant)
+);
+
+CREATE POLICY persona_condiciones_delete ON public.persona_condiciones
+FOR DELETE
+USING (
   id_tenant = public.app_current_tenant_id()
   AND public.can_admin_active_tenant(id_tenant)
 );

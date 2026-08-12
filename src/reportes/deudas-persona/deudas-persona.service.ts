@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 import { ReportesTenantBaseService } from '../reportes-tenant-base.service';
 
 type JsonResultRow = {
@@ -8,6 +9,10 @@ type JsonResultRow = {
 
 @Injectable()
 export class DeudasPersonaService extends ReportesTenantBaseService {
+  constructor(prisma: PrismaService) {
+    super(prisma);
+  }
+
   async getExtracto(tenantId: bigint, userId: bigint, personaId: bigint): Promise<unknown> {
     return this.executePersonaFunction('fn_persona_extracto', tenantId, userId, personaId);
   }

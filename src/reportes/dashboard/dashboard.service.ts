@@ -1,39 +1,66 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 import { ReportesTenantBaseService } from '../reportes-tenant-base.service';
 
-type JsonResultRow = {
-  reporte: unknown | null;
+type DashboardRow = {
+  reporte: string | null;
+};
+
+type DashboardGeneral = {
+  caja: {
+    saldoActual: number;
+  };
+  personas: {
+    total: number;
+    padronados: number;
+  };
+  obligaciones: {
+    pendientes: number;
+    deudaTotal: number;
+  };
+  faenas: {
+    programadas: number;
+  };
+  asambleas: {
+    proximas: number;
+  };
 };
 
 @Injectable()
 export class DashboardService extends ReportesTenantBaseService {
-  async getDashboardGeneral(tenantId: bigint, userId: bigint): Promise<unknown> {
+  constructor(prisma: PrismaService) {
+    super(prisma);
+  }
+
+  async getDashboardGeneral(
+    tenantId: bigint,
+    userId: bigint,
+  ): Promise<DashboardGeneral> {
     return this.withTenantContext(userId, tenantId, async (tx) => {
-      try {
-        const rows = await tx.$queryRaw<JsonResultRow[]>(
-          Prisma.sql`SELECT fn_dashboard_general(${tenantId}) AS reporte`,
-        );
-        return this.unwrapJsonValue(rows[0]?.reporte, {});
-      } catch (error) {
-        this.handleFunctionError(error);
-        throw error;
-      }
+      const rows = await tx.$queryRaw<DashboardRow[]>(
+        Prisma.sql`SELECT public.fn_dashboard_general(${tenantId})::text AS reporte`,
+      );
+
+      return this.parseDashboard(rows[0]?.reporte);
     });
   }
 
-  private handleFunctionError(error: unknown): never | void {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError ||
-      error instanceof Prisma.PrismaClientUnknownRequestError
-    ) {
-      const message = error.message ?? '';
-
-      if (message.includes('app.tenant_id')) {
-        throw new BadRequestException(
-          'No se pudo generar el dashboard porque falta contexto de tenant en la sesion.',
-        );
-      }
+  private parseDashboard(value: string | null | undefined): DashboardGeneral {
+    if (!value) {
+      return this.emptyDashboard();
     }
+
+    return JSON.parse(value) as DashboardGeneral;
+  }
+
+  private emptyDashboard(): DashboardGeneral {
+    return {
+      caja: { saldoActual: 0 },
+      personas: { total: 0, padronados: 0 },
+      obligaciones: { pendientes: 0, deudaTotal: 0 },
+      faenas: { programadas: 0 },
+      asambleas: { proximas: 0 },
+    };
   }
 }

@@ -1,9 +1,21 @@
-import { ArgumentsHost, HttpStatus } from '@nestjs/common';
+import { ArgumentsHost, HttpStatus, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaExceptionFilter } from './prisma-exception.filter';
 
 describe('PrismaExceptionFilter', () => {
-  const filter = new PrismaExceptionFilter();
+  let filter: PrismaExceptionFilter;
+  let loggerErrorSpy: jest.SpyInstance;
+  const nodeEnv = process.env.NODE_ENV;
+
+  beforeEach(() => {
+    loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    filter = new PrismaExceptionFilter();
+  });
+
+  afterEach(() => {
+    loggerErrorSpy.mockRestore();
+    process.env.NODE_ENV = nodeEnv;
+  });
 
   function createHost() {
     const response = {
@@ -122,6 +134,27 @@ describe('PrismaExceptionFilter', () => {
   });
 
   it('mantiene Prisma desconocido como 500 sin detalles tecnicos', () => {
+    const { host, response } = createHost();
+
+    filter.catch(knownError('P9999', 'Raw query failed: tabla interna'), host);
+
+    expect(response.status).toHaveBeenCalledWith(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+    expect(response.json).toHaveBeenCalledWith({
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: 'Ocurrio un error interno al procesar la solicitud.',
+      error: 'Internal Server Error',
+      details: 'Raw query failed: tabla interna',
+    });
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Prisma error no mapeado P9999'),
+      expect.any(String),
+    );
+  });
+
+  it('oculta details de Prisma desconocido en produccion', () => {
+    process.env.NODE_ENV = 'production';
     const { host, response } = createHost();
 
     filter.catch(knownError('P9999', 'Raw query failed: tabla interna'), host);

@@ -7,6 +7,9 @@ export class PersonaResponseDto {
   @ApiProperty({ type: Number, example: 1 })
   idPersona!: number;
 
+  @ApiProperty({ type: Number, nullable: true, example: 25 })
+  nroPadron!: number | null;
+
   @ApiProperty({ example: 'Juan' })
   nombres!: string;
 

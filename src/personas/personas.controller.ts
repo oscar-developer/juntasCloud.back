@@ -104,7 +104,7 @@ export class PersonasController {
 
   @Delete(':idPersona')
   @Roles('OWNER', 'ADMIN')
-  @ApiOperation({ summary: 'Retirar persona (borrado logico)' })
+  @ApiOperation({ summary: 'Eliminar persona fisicamente' })
   @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
   @ApiOkResponse({ type: PersonaResponseDto })
   remove(@Param('idPersona') idPersona: string, @Req() req: Request): Promise<PersonaResponseDto> {

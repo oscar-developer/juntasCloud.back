@@ -1,55 +1,98 @@
-CREATE OR REPLACE FUNCTION fn_dashboard_general(
+/*
+Uso:
+
+SELECT public.fn_dashboard_general(7);
+
+Nota:
+Esta funcion lee tablas con RLS. Desde el backend debe ejecutarse dentro de una
+transaccion que haya configurado app.user_id y app.tenant_id.
+*/
+CREATE OR REPLACE FUNCTION public.fn_dashboard_general(
   p_id_tenant BIGINT
 )
 RETURNS JSONB
 LANGUAGE plpgsql
+STABLE
 AS $$
 DECLARE
   v_result JSONB;
 BEGIN
+  IF p_id_tenant IS NULL THEN
+    RAISE EXCEPTION 'El id_tenant es obligatorio';
+  END IF;
 
   SELECT jsonb_build_object(
-
-    -- 💰 Caja
-    'caja', jsonb_build_object(
-      'saldoActual', COALESCE(SUM(
-        CASE 
-          WHEN tipo = 'INGRESO' THEN monto
-          WHEN tipo = 'GASTO' THEN -monto
-        END
-      ), 0)
-    ),
-
-    -- 📊 Personas
-    'personas', jsonb_build_object(
-      'total', COUNT(*),
-      'padronados', COUNT(*) FILTER (WHERE tipo_participante = 'PADRONADO')
-    ),
-
-    -- 🧾 Obligaciones
-    'obligaciones', jsonb_build_object(
-      'pendientes', COUNT(*) FILTER (WHERE estado = 'PENDIENTE'),
-      'deudaTotal', COALESCE(SUM(saldo), 0)
-    ),
-
-    -- 🛠️ Faenas
-    'faenas', jsonb_build_object(
-      'programadas', COUNT(*) FILTER (WHERE estado = 'PROGRAMADA')
-    ),
-
-    -- 🏛️ Asambleas
-    'asambleas', jsonb_build_object(
-      'proximas', COUNT(*) FILTER (
-        WHERE estado = 'PROGRAMADA'
+    'caja',
+    (
+      SELECT jsonb_build_object(
+        'saldoActual',
+        COALESCE(
+          SUM(
+            CASE
+              WHEN cm.tipo = 'INGRESO' THEN cm.monto
+              WHEN cm.tipo = 'GASTO' THEN -cm.monto
+              ELSE 0
+            END
+          ),
+          0
+        )
       )
-    )
+      FROM public.caja_movimientos cm
+      WHERE cm.id_tenant = p_id_tenant
+        AND cm.anulado = FALSE
+    ),
 
+    'personas',
+    (
+      SELECT jsonb_build_object(
+        'total',
+        COUNT(*),
+        'padronados',
+        COUNT(*) FILTER (WHERE p.tipo_participante = 'PADRONADO')
+      )
+      FROM public.personas p
+      WHERE p.id_tenant = p_id_tenant
+    ),
+
+    'obligaciones',
+    (
+      SELECT jsonb_build_object(
+        'pendientes',
+        COUNT(*) FILTER (WHERE op.estado = 'PENDIENTE'),
+        'deudaTotal',
+        COALESCE(
+          SUM(op.saldo) FILTER (WHERE op.estado IN ('PENDIENTE', 'PARCIAL')),
+          0
+        )
+      )
+      FROM public.obligaciones_persona op
+      WHERE op.id_tenant = p_id_tenant
+    ),
+
+    'faenas',
+    (
+      SELECT jsonb_build_object(
+        'programadas',
+        COUNT(*)
+      )
+      FROM public.faenas f
+      WHERE f.id_tenant = p_id_tenant
+        AND f.estado = 'PROGRAMADA'
+    ),
+
+    'asambleas',
+    (
+      SELECT jsonb_build_object(
+        'proximas',
+        COUNT(*)
+      )
+      FROM public.asambleas a
+      WHERE a.id_tenant = p_id_tenant
+        AND a.estado = 'PROGRAMADA'
+    )
   )
-  INTO v_result
-  FROM caja_movimientos cm
-  WHERE cm.id_tenant = p_id_tenant;
+  INTO v_result;
 
   RETURN v_result;
-
 END;
 $$;

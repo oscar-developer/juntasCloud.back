@@ -28,9 +28,22 @@ import { RolesGuard } from '../common/auth/roles.guard';
 import { getTenantIdFromHeader } from '../common/tenant/get-tenant-id-from-header';
 import { TenantMembershipGuard } from '../common/tenant/tenant-membership.guard';
 import { CreatePersonaDto } from './dto/create-persona.dto';
+import {
+  QueryPersonaAsistenciasDto,
+  QueryPersonaObligacionesDto,
+  QueryPersonaPagosDto,
+} from './dto/persona-ficha-query.dto';
+import {
+  PaginatedPersonaAsistenciasResponseDto,
+  PaginatedPersonaObligacionesResponseDto,
+  PaginatedPersonaPagosResponseDto,
+  PersonaFichaResponseDto,
+  PersonaTerrenoFichaDto,
+} from './dto/persona-ficha-response.dto';
 import { PersonaResponseDto } from './dto/persona-response.dto';
 import { QueryPersonasDto } from './dto/query-personas.dto';
 import { UpdatePersonaDto } from './dto/update-persona.dto';
+import { PersonaFichaService } from './persona-ficha.service';
 import { PersonasService } from './personas.service';
 
 @ApiTags('personas')
@@ -50,7 +63,10 @@ import { PersonasService } from './personas.service';
 )
 @Controller('personas')
 export class PersonasController {
-  constructor(private readonly personasService: PersonasService) {}
+  constructor(
+    private readonly personasService: PersonasService,
+    private readonly personaFichaService: PersonaFichaService,
+  ) {}
 
   @Post()
   @Roles('OWNER', 'ADMIN')
@@ -69,6 +85,92 @@ export class PersonasController {
     @Req() req: Request,
   ): Promise<PersonaResponseDto[]> {
     return this.personasService.findAll(this.getTenantId(req), this.getUserId(req), query);
+  }
+
+  @Get(':idPersona/ficha')
+  @Roles('OWNER', 'ADMIN', 'MEMBER')
+  @ApiOperation({ summary: 'Obtener resumen de ficha de una persona' })
+  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiOkResponse({ type: PersonaFichaResponseDto })
+  getFicha(
+    @Param('idPersona') idPersona: string,
+    @Req() req: Request,
+  ): Promise<PersonaFichaResponseDto> {
+    return this.personaFichaService.getFicha(
+      this.getTenantId(req),
+      this.getUserId(req),
+      this.personasService.parsePersonaId(idPersona),
+    );
+  }
+
+  @Get(':idPersona/asistencias')
+  @Roles('OWNER', 'ADMIN', 'MEMBER')
+  @ApiOperation({ summary: 'Obtener historial de asistencias de una persona' })
+  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiOkResponse({ type: PaginatedPersonaAsistenciasResponseDto })
+  getAsistencias(
+    @Param('idPersona') idPersona: string,
+    @Query() query: QueryPersonaAsistenciasDto,
+    @Req() req: Request,
+  ): Promise<PaginatedPersonaAsistenciasResponseDto> {
+    return this.personaFichaService.getAsistencias(
+      this.getTenantId(req),
+      this.getUserId(req),
+      this.personasService.parsePersonaId(idPersona),
+      query,
+    );
+  }
+
+  @Get(':idPersona/obligaciones')
+  @Roles('OWNER', 'ADMIN', 'MEMBER')
+  @ApiOperation({ summary: 'Obtener obligaciones financieras de una persona' })
+  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiOkResponse({ type: PaginatedPersonaObligacionesResponseDto })
+  getObligaciones(
+    @Param('idPersona') idPersona: string,
+    @Query() query: QueryPersonaObligacionesDto,
+    @Req() req: Request,
+  ): Promise<PaginatedPersonaObligacionesResponseDto> {
+    return this.personaFichaService.getObligaciones(
+      this.getTenantId(req),
+      this.getUserId(req),
+      this.personasService.parsePersonaId(idPersona),
+      query,
+    );
+  }
+
+  @Get(':idPersona/pagos')
+  @Roles('OWNER', 'ADMIN', 'MEMBER')
+  @ApiOperation({ summary: 'Obtener pagos aplicados a obligaciones de una persona' })
+  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiOkResponse({ type: PaginatedPersonaPagosResponseDto })
+  getPagos(
+    @Param('idPersona') idPersona: string,
+    @Query() query: QueryPersonaPagosDto,
+    @Req() req: Request,
+  ): Promise<PaginatedPersonaPagosResponseDto> {
+    return this.personaFichaService.getPagos(
+      this.getTenantId(req),
+      this.getUserId(req),
+      this.personasService.parsePersonaId(idPersona),
+      query,
+    );
+  }
+
+  @Get(':idPersona/terrenos')
+  @Roles('OWNER', 'ADMIN', 'MEMBER')
+  @ApiOperation({ summary: 'Obtener terrenos relacionados a una persona' })
+  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiOkResponse({ type: PersonaTerrenoFichaDto, isArray: true })
+  getTerrenos(
+    @Param('idPersona') idPersona: string,
+    @Req() req: Request,
+  ): Promise<PersonaTerrenoFichaDto[]> {
+    return this.personaFichaService.getTerrenos(
+      this.getTenantId(req),
+      this.getUserId(req),
+      this.personasService.parsePersonaId(idPersona),
+    );
   }
 
   @Get(':idPersona')

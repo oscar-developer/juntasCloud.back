@@ -48,7 +48,12 @@ BEGIN
         'total',
         COUNT(*),
         'padronados',
-        COUNT(*) FILTER (WHERE p.tipo_participante = 'PADRONADO')
+        COUNT(*) FILTER (WHERE p.tipo_participante = 'PADRONADO'),
+        'noPadronados',
+        COUNT(*) FILTER (WHERE p.tipo_participante = 'NO_PADRONADO'),
+        'invitados',
+        COUNT(*) FILTER (WHERE p.tipo_participante = 'INVITADO')
+
       )
       FROM public.personas p
       WHERE p.id_tenant = p_id_tenant

@@ -3,21 +3,81 @@
 -- =============================================================================
 
 INSERT INTO public.conceptos_cobro_base (
- cod_concepto_cobro,
- nombre,
- tipo,
- activo,
- requiere_periodo,
- observaciones
+    cod_concepto_cobro,
+    nombre,
+    tipo,
+    activo,
+    requiere_periodo,
+    observaciones
 )
 VALUES
-( 'CUOTA_ORDINARIA', 'Cuota ordinaria', 'CUOTA_ORDINARIA', TRUE, TRUE, 'Cobro periódico regular de la junta.'),
-( 'CUOTA_EXTRAORDINARIA', 'Cuota extraordinaria', 'CUOTA_EXTRAORDINARIA', TRUE, FALSE, 'Cobro especial aprobado por la junta.'),
-( 'MULTA_FAENA', 'Multa por faena', 'MULTA_FAENA', TRUE, FALSE, 'Multa generada por inasistencia o incumplimiento en faenas.'),
-( 'MULTA_ASAMBLEA', 'Multa por asamblea', 'MULTA_ASAMBLEA', TRUE, FALSE, 'Multa generada por inasistencia a asambleas.'),
-( 'APORTE', 'Aporte voluntario', 'APORTE', TRUE, FALSE, 'Aporte no obligatorio realizado por una persona.'),
-( 'OTRO', 'Otro cobro', 'OTRO', TRUE, FALSE, 'Otros conceptos de cobro definidos por la junta.');
+(
+    'CUOTA_ORDINARIA',
+    'Cuota ordinaria',
+    'CUOTA_ORDINARIA',
+    TRUE,
+    TRUE,
+    'Cobro periódico regular de la junta.'
+),
+(
+    'CUOTA_EXTRAORDINARIA',
+    'Cuota extraordinaria',
+    'CUOTA_EXTRAORDINARIA',
+    TRUE,
+    FALSE,
+    'Cobro especial aprobado por la junta.'
+),
 
+(
+    'MULTA_FAENA_INASIST',
+    'Multa por inasistencia a faena',
+    'MULTA_FAENA',
+    TRUE,
+    FALSE,
+    'Multa generada por inasistencia a una faena.'
+),
+(
+    'MULTA_FAENA_TARDANZA',
+    'Multa por tardanza a faena',
+    'MULTA_FAENA',
+    TRUE,
+    FALSE,
+    'Multa generada por tardanza en una faena.'
+),
+
+(
+    'MULTA_ASAM_INASIST',
+    'Multa por inasistencia a asamblea',
+    'MULTA_ASAMBLEA',
+    TRUE,
+    FALSE,
+    'Multa generada por inasistencia a una asamblea.'
+),
+(
+    'MULTA_ASAM_TARDANZA',
+    'Multa por tardanza a asamblea',
+    'MULTA_ASAMBLEA',
+    TRUE,
+    FALSE,
+    'Multa generada por tardanza en una asamblea.'
+),
+
+(
+    'APORTE',
+    'Aporte voluntario',
+    'APORTE',
+    TRUE,
+    FALSE,
+    'Aporte no obligatorio realizado por una persona.'
+),
+(
+    'OTRO',
+    'Otro cobro',
+    'OTRO',
+    TRUE,
+    FALSE,
+    'Otros conceptos de cobro definidos por la junta.'
+);
 -- =============================================================================
 -- CATEGORÍAS BASE DE CAJA
 -- =============================================================================

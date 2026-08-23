@@ -11,7 +11,16 @@ import { AnularAsistenciaAsambleaDto } from './dto/anular-asistencia-asamblea.dt
 import { AsistenciaAsambleaResponseDto } from './dto/asistencia-asamblea-response.dto';
 import { CreateAsistenciaAsambleaDto } from './dto/create-asistencia-asamblea.dto';
 import { QueryAsistenciaAsambleaDto } from './dto/query-asistencia-asamblea.dto';
+import { RegistrarTardanzaAsambleaDto } from './dto/registrar-tardanza-asamblea.dto';
+import { RegistrarTardanzaAsambleaResponseDto } from './dto/registrar-tardanza-asamblea-response.dto';
 import { UpdateAsistenciaAsambleaDto } from './dto/update-asistencia-asamblea.dto';
+
+type RegistrarTardanzaAsambleaRow = {
+  id_asistencia: bigint;
+  id_obligacion: bigint;
+  id_movimiento: bigint | null;
+  estado_obligacion: string;
+};
 
 @Injectable()
 export class AsistenciaAsambleaService {
@@ -204,6 +213,49 @@ export class AsistenciaAsambleaService {
     });
   }
 
+  async registrarTardanza(
+    tenantId: bigint,
+    userId: bigint,
+    idAsistencia: bigint,
+    dto: RegistrarTardanzaAsambleaDto,
+  ): Promise<RegistrarTardanzaAsambleaResponseDto> {
+    const horaLlegada = this.required(dto.horaLlegada, 'horaLlegada');
+    this.toTime(horaLlegada, 'horaLlegada');
+    const medioPago = this.nullable(dto.medioPago);
+
+    if (dto.cobrarAhora && !medioPago) {
+      throw new BadRequestException('medioPago es obligatorio cuando cobrarAhora es true.');
+    }
+
+    return this.withTenantContext(userId, tenantId, async (tx) => {
+      try {
+        const rows = await tx.$queryRaw<RegistrarTardanzaAsambleaRow[]>(
+          Prisma.sql`
+            SELECT *
+            FROM public.fn_registrar_tardanza_asamblea(
+              ${tenantId},
+              ${idAsistencia},
+              ${horaLlegada}::time,
+              ${dto.cobrarAhora},
+              ${medioPago},
+              ${userId}
+            )
+          `,
+        );
+        const result = rows[0];
+
+        if (!result) {
+          throw new NotFoundException('No se encontro la asistencia de asamblea solicitada.');
+        }
+
+        return this.toTardanzaResponse(result);
+      } catch (error) {
+        this.handleRegistrarTardanzaError(error);
+        throw error;
+      }
+    });
+  }
+
   parseId(value: string, field = 'idAsistencia'): bigint {
     if (!/^\d+$/.test(value)) {
       throw new BadRequestException(`${field} debe ser un entero positivo.`);
@@ -304,6 +356,53 @@ export class AsistenciaAsambleaService {
       throw new BadRequestException(`${field} no tiene una hora valida.`);
     }
     return new Date(Date.UTC(1970, 0, 1, hours, minutes, seconds));
+  }
+
+  private handleRegistrarTardanzaError(error: unknown): void {
+    if (
+      error instanceof BadRequestException ||
+      error instanceof ConflictException ||
+      error instanceof NotFoundException
+    ) {
+      throw error;
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError ||
+      error instanceof Prisma.PrismaClientUnknownRequestError
+    ) {
+      const message = error.message ?? '';
+
+      if (message.includes('No se encontró la asistencia')) {
+        throw new NotFoundException('No se encontro la asistencia de asamblea solicitada.');
+      }
+      if (
+        message.includes('Debe indicar el medio de pago') ||
+        message.includes('app.tenant_id') ||
+        message.includes('app.user_id')
+      ) {
+        throw new BadRequestException(message.includes('Debe indicar el medio de pago')
+          ? 'medioPago es obligatorio cuando cobrarAhora es true.'
+          : 'No se pudo registrar la tardanza porque falta contexto de sesion.');
+      }
+      if (
+        message.includes('No está configurado el concepto de multa por tardanza') ||
+        message.includes('No existe la categoría de caja para multas')
+      ) {
+        throw new ConflictException(message);
+      }
+    }
+  }
+
+  private toTardanzaResponse(
+    item: RegistrarTardanzaAsambleaRow,
+  ): RegistrarTardanzaAsambleaResponseDto {
+    return {
+      idAsistencia: Number(item.id_asistencia),
+      idObligacion: Number(item.id_obligacion),
+      idMovimiento: item.id_movimiento === null ? null : Number(item.id_movimiento),
+      estadoObligacion: item.estado_obligacion,
+    };
   }
 
   private toResponse(item: {

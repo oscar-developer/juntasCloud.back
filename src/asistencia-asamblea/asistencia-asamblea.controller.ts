@@ -31,6 +31,8 @@ import { AnularAsistenciaAsambleaDto } from './dto/anular-asistencia-asamblea.dt
 import { AsistenciaAsambleaResponseDto } from './dto/asistencia-asamblea-response.dto';
 import { CreateAsistenciaAsambleaDto } from './dto/create-asistencia-asamblea.dto';
 import { QueryAsistenciaAsambleaDto } from './dto/query-asistencia-asamblea.dto';
+import { RegistrarTardanzaAsambleaDto } from './dto/registrar-tardanza-asamblea.dto';
+import { RegistrarTardanzaAsambleaResponseDto } from './dto/registrar-tardanza-asamblea-response.dto';
 import { UpdateAsistenciaAsambleaDto } from './dto/update-asistencia-asamblea.dto';
 import { AsistenciaAsambleaService } from './asistencia-asamblea.service';
 
@@ -106,6 +108,24 @@ export class AsistenciaAsambleaController {
     @Req() req: Request,
   ): Promise<AsistenciaAsambleaResponseDto> {
     return this.service.update(
+      getTenantIdFromHeader(req),
+      getUserIdFromRequest(req),
+      this.service.parseId(idAsistencia),
+      dto,
+    );
+  }
+
+  @Post('asistencia-asamblea/:idAsistencia/tardanza')
+  @Roles('OWNER', 'ADMIN')
+  @ApiOperation({ summary: 'Registrar tardanza de asistencia de asamblea' })
+  @ApiParam({ name: 'idAsistencia' })
+  @ApiOkResponse({ type: RegistrarTardanzaAsambleaResponseDto })
+  registrarTardanza(
+    @Param('idAsistencia') idAsistencia: string,
+    @Body() dto: RegistrarTardanzaAsambleaDto,
+    @Req() req: Request,
+  ): Promise<RegistrarTardanzaAsambleaResponseDto> {
+    return this.service.registrarTardanza(
       getTenantIdFromHeader(req),
       getUserIdFromRequest(req),
       this.service.parseId(idAsistencia),

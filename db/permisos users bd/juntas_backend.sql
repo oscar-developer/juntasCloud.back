@@ -28,7 +28,8 @@ TO juntas_backend;
 REVOKE INSERT, UPDATE, DELETE
 ON public.tenants,
    public.tenant_users,
-   public.tenant_invitations
+   public.tenant_invitations,
+   public.persona_constancias
 FROM juntas_backend;
 
 -- Catálogos globales de solo lectura.

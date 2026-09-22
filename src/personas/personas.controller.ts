@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -14,7 +16,12 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBadRequestResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiHeader,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -42,8 +49,11 @@ import {
 } from './dto/persona-ficha-response.dto';
 import { PersonaResponseDto } from './dto/persona-response.dto';
 import { QueryPersonasDto } from './dto/query-personas.dto';
+import { PersonaConstanciaEmitidaDto } from './dto/persona-constancia-response.dto';
+import { RevocarPersonaConstanciaDto } from './dto/revocar-persona-constancia.dto';
 import { UpdatePersonaDto } from './dto/update-persona.dto';
 import { PersonaFichaService } from './persona-ficha.service';
+import { PersonaConstanciasService } from './persona-constancias.service';
 import { PersonasService } from './personas.service';
 
 @ApiTags('personas')
@@ -66,14 +76,22 @@ export class PersonasController {
   constructor(
     private readonly personasService: PersonasService,
     private readonly personaFichaService: PersonaFichaService,
+    private readonly personaConstanciasService: PersonaConstanciasService,
   ) {}
 
   @Post()
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Crear persona' })
   @ApiOkResponse({ type: PersonaResponseDto })
-  create(@Body() dto: CreatePersonaDto, @Req() req: Request): Promise<PersonaResponseDto> {
-    return this.personasService.create(this.getTenantId(req), this.getUserId(req), dto);
+  create(
+    @Body() dto: CreatePersonaDto,
+    @Req() req: Request,
+  ): Promise<PersonaResponseDto> {
+    return this.personasService.create(
+      this.getTenantId(req),
+      this.getUserId(req),
+      dto,
+    );
   }
 
   @Get()
@@ -84,13 +102,21 @@ export class PersonasController {
     @Query() query: QueryPersonasDto,
     @Req() req: Request,
   ): Promise<PersonaResponseDto[]> {
-    return this.personasService.findAll(this.getTenantId(req), this.getUserId(req), query);
+    return this.personasService.findAll(
+      this.getTenantId(req),
+      this.getUserId(req),
+      query,
+    );
   }
 
   @Get(':idPersona/ficha')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Obtener resumen de ficha de una persona' })
-  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
   @ApiOkResponse({ type: PersonaFichaResponseDto })
   getFicha(
     @Param('idPersona') idPersona: string,
@@ -106,7 +132,11 @@ export class PersonasController {
   @Get(':idPersona/asistencias')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Obtener historial de asistencias de una persona' })
-  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
   @ApiOkResponse({ type: PaginatedPersonaAsistenciasResponseDto })
   getAsistencias(
     @Param('idPersona') idPersona: string,
@@ -124,7 +154,11 @@ export class PersonasController {
   @Get(':idPersona/obligaciones')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Obtener obligaciones financieras de una persona' })
-  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
   @ApiOkResponse({ type: PaginatedPersonaObligacionesResponseDto })
   getObligaciones(
     @Param('idPersona') idPersona: string,
@@ -141,8 +175,14 @@ export class PersonasController {
 
   @Get(':idPersona/pagos')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
-  @ApiOperation({ summary: 'Obtener pagos aplicados a obligaciones de una persona' })
-  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiOperation({
+    summary: 'Obtener pagos aplicados a obligaciones de una persona',
+  })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
   @ApiOkResponse({ type: PaginatedPersonaPagosResponseDto })
   getPagos(
     @Param('idPersona') idPersona: string,
@@ -160,7 +200,11 @@ export class PersonasController {
   @Get(':idPersona/terrenos')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Obtener terrenos relacionados a una persona' })
-  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
   @ApiOkResponse({ type: PersonaTerrenoFichaDto, isArray: true })
   getTerrenos(
     @Param('idPersona') idPersona: string,
@@ -173,12 +217,77 @@ export class PersonasController {
     );
   }
 
+  @Post(':idPersona/constancias')
+  @Roles('OWNER', 'ADMIN')
+  @ApiOperation({ summary: 'Emitir una constancia verificable de persona' })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
+  @ApiCreatedResponse({ type: PersonaConstanciaEmitidaDto })
+  @ApiBadRequestResponse({
+    description: 'Identificador invalido o no se pudo registrar la constancia.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Solo OWNER o ADMIN pueden emitir constancias.',
+  })
+  @ApiNotFoundResponse({
+    description: 'La persona no existe en el tenant activo.',
+  })
+  issueConstancia(
+    @Param('idPersona') idPersona: string,
+    @Req() req: Request,
+  ): Promise<PersonaConstanciaEmitidaDto> {
+    return this.personaConstanciasService.issue(
+      this.getTenantId(req),
+      this.getUserId(req),
+      this.personasService.parsePersonaId(idPersona),
+    );
+  }
+
+  @Patch(':idPersona/constancias/:idConstancia/revocar')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles('OWNER', 'ADMIN')
+  @ApiOperation({ summary: 'Revocar una constancia verificable de persona' })
+  @ApiParam({ name: 'idPersona', type: Number })
+  @ApiParam({ name: 'idConstancia', type: Number })
+  @ApiNoContentResponse({ description: 'Constancia revocada correctamente.' })
+  @ApiBadRequestResponse({ description: 'Identificador o motivo invalido.' })
+  @ApiForbiddenResponse({
+    description: 'Solo OWNER o ADMIN pueden revocar constancias.',
+  })
+  @ApiNotFoundResponse({
+    description: 'La constancia no existe o ya fue revocada.',
+  })
+  async revokeConstancia(
+    @Param('idPersona') idPersona: string,
+    @Param('idConstancia') idConstancia: string,
+    @Body() dto: RevocarPersonaConstanciaDto,
+    @Req() req: Request,
+  ): Promise<void> {
+    await this.personaConstanciasService.revoke(
+      this.getTenantId(req),
+      this.getUserId(req),
+      this.personasService.parsePersonaId(idPersona),
+      this.personaConstanciasService.parseId(idConstancia, 'idConstancia'),
+      dto.motivo,
+    );
+  }
+
   @Get(':idPersona')
   @Roles('OWNER', 'ADMIN', 'MEMBER')
   @ApiOperation({ summary: 'Obtener persona por idPersona' })
-  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
   @ApiOkResponse({ type: PersonaResponseDto })
-  findOne(@Param('idPersona') idPersona: string, @Req() req: Request): Promise<PersonaResponseDto> {
+  findOne(
+    @Param('idPersona') idPersona: string,
+    @Req() req: Request,
+  ): Promise<PersonaResponseDto> {
     return this.personasService.findOne(
       this.getTenantId(req),
       this.getUserId(req),
@@ -189,7 +298,11 @@ export class PersonasController {
   @Patch(':idPersona')
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Actualizar persona' })
-  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
   @ApiOkResponse({ type: PersonaResponseDto })
   update(
     @Param('idPersona') idPersona: string,
@@ -207,9 +320,16 @@ export class PersonasController {
   @Delete(':idPersona')
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Eliminar persona fisicamente' })
-  @ApiParam({ name: 'idPersona', type: Number, description: 'id_persona dentro del tenant activo' })
+  @ApiParam({
+    name: 'idPersona',
+    type: Number,
+    description: 'id_persona dentro del tenant activo',
+  })
   @ApiOkResponse({ type: PersonaResponseDto })
-  remove(@Param('idPersona') idPersona: string, @Req() req: Request): Promise<PersonaResponseDto> {
+  remove(
+    @Param('idPersona') idPersona: string,
+    @Req() req: Request,
+  ): Promise<PersonaResponseDto> {
     return this.personasService.remove(
       this.getTenantId(req),
       this.getUserId(req),

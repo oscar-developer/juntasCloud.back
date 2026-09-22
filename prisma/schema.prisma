@@ -124,6 +124,8 @@ model auth_users {
   obligaciones_persona_obligaciones_persona_created_by_userToauth_users obligaciones_persona[]   @relation("obligaciones_persona_created_by_userToauth_users")
   obligaciones_persona_obligaciones_persona_updated_by_userToauth_users obligaciones_persona[]   @relation("obligaciones_persona_updated_by_userToauth_users")
   persona_condiciones                                                   persona_condiciones[]
+  persona_constancias_persona_constancias_issued_by_userToauth_users    persona_constancias[]    @relation("persona_constancias_issued_by_userToauth_users")
+  persona_constancias_persona_constancias_revoked_by_userToauth_users   persona_constancias[]    @relation("persona_constancias_revoked_by_userToauth_users")
   tenant_invitations                                                    tenant_invitations[]
   tenant_users_tenant_users_invited_byToauth_users                      tenant_users[]           @relation("tenant_users_invited_byToauth_users")
   tenant_users_tenant_users_id_userToauth_users                         tenant_users[]           @relation("tenant_users_id_userToauth_users")
@@ -347,6 +349,7 @@ model personas {
   junta_miembros       junta_miembros[]
   obligaciones_persona obligaciones_persona[]
   persona_condiciones  persona_condiciones[]
+  persona_constancias  persona_constancias[]
   persona_terreno      persona_terreno[]
   tenants              tenants                @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_personas00")
   tenant_users         tenant_users?
@@ -442,6 +445,7 @@ model tenants {
   obligaciones_persona   obligaciones_persona[]
   persona_terreno        persona_terreno[]
   personas               personas[]
+  persona_constancias    persona_constancias[]
   tenant_invitations     tenant_invitations[]
   tenant_profiles        tenant_profiles[]
   tenant_users           tenant_users[]
@@ -562,8 +566,8 @@ model credito_movimientos {
   creditos_persona      creditos_persona @relation(fields: [id_tenant, id_credito], references: [id_tenant, id_credito], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_credito")
   tenants               tenants          @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_crm_tenant")
 
-  @@index([id_tenant, id_credito, fecha_movimiento], map: "inx_crm_credito_fecha")
   @@unique([id_tenant, id_credito_movimiento])
+  @@index([id_tenant, id_credito, fecha_movimiento], map: "inx_crm_credito_fecha")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -631,8 +635,8 @@ model obligacion_movimientos {
   obligaciones_persona     obligaciones_persona @relation(fields: [id_tenant, id_obligacion], references: [id_tenant, id_obligacion], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_obligacion")
   tenants                  tenants              @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_om_tenant")
 
-  @@index([id_tenant, id_obligacion, fecha_movimiento], map: "inx_om_obligacion_fecha")
   @@unique([id_tenant, id_obligacion_movimiento])
+  @@index([id_tenant, id_obligacion, fecha_movimiento], map: "inx_om_obligacion_fecha")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -650,8 +654,8 @@ model obligacion_pagos {
   obligaciones_persona obligaciones_persona @relation(fields: [id_tenant, id_obligacion], references: [id_tenant, id_obligacion], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_obligacion")
   tenants              tenants              @relation(fields: [id_tenant], references: [id_tenant], onDelete: NoAction, onUpdate: NoAction, map: "fk_obp_tenant")
 
-  @@index([id_tenant, id_movimiento], map: "inx_obp_movimiento")
   @@unique([id_tenant, id_obligacion_pago])
+  @@index([id_tenant, id_movimiento], map: "inx_obp_movimiento")
   @@index([id_tenant, id_obligacion], map: "inx_obp_obligacion")
 }
 
@@ -712,6 +716,29 @@ model persona_condiciones {
   auth_users           auth_users @relation(fields: [created_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_pc_user")
 
   @@index([id_tenant, id_persona, fecha_inicio], map: "inx_pc_persona_fecha")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model persona_constancias {
+  id_constancia                                              BigInt      @id(map: "pk_persona_constancias") @default(autoincrement())
+  id_tenant                                                  BigInt
+  id_persona                                                 BigInt
+  codigo                                                     String      @unique(map: "ux_persona_constancias_codigo") @db.VarChar(32)
+  token_hash                                                 String      @unique(map: "ux_persona_constancias_token_hash") @db.VarChar(64)
+  snapshot                                                   Json
+  snapshot_hash                                              String      @db.VarChar(64)
+  issued_at                                                  DateTime    @default(now()) @db.Timestamptz(6)
+  issued_by_user                                             BigInt
+  revoked_at                                                 DateTime?   @db.Timestamptz(6)
+  revoked_by_user                                            BigInt?
+  motivo_revocacion                                          String?     @db.VarChar(300)
+  tenants                                                    tenants     @relation(fields: [id_tenant], references: [id_tenant], onDelete: Cascade, onUpdate: NoAction, map: "fk_persona_constancias_tenant")
+  personas                                                   personas    @relation(fields: [id_tenant, id_persona], references: [id_tenant, id_persona], onDelete: Cascade, onUpdate: NoAction, map: "fk_persona_constancias_persona")
+  auth_users_persona_constancias_issued_by_userToauth_users  auth_users  @relation("persona_constancias_issued_by_userToauth_users", fields: [issued_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_constancias_issued_by")
+  auth_users_persona_constancias_revoked_by_userToauth_users auth_users? @relation("persona_constancias_revoked_by_userToauth_users", fields: [revoked_by_user], references: [id_user], onDelete: NoAction, onUpdate: NoAction, map: "fk_persona_constancias_revoked_by")
+
+  @@unique([id_tenant, id_constancia], map: "uq_persona_constancias_tenant_constancia")
+  @@index([id_tenant, id_persona, issued_at], map: "ix_persona_constancias_persona")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
